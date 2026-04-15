@@ -1,0 +1,55 @@
+# =============================================================================
+# requirements.txt — Edge AI YOLOv8 + NLP project (Jetson Nano / Python 3.8+)
+# =============================================================================
+#
+# JETSON NANO INSTALLATION NOTES:
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. Flash your Jetson Nano with JetPack 4.6.x (Ubuntu 18.04) or
+#    JetPack 5.x (Ubuntu 20.04). JetPack ships with CUDA, cuDNN, TensorRT.
+#
+# 2. Install system dependencies:
+#       sudo apt-get update
+#       sudo apt-get install -y python3-pip python3-dev \
+#           libopencv-dev python3-opencv \
+#           gstreamer1.0-tools gstreamer1.0-plugins-good \
+#           gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+#           libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+#
+# 3. Install PyTorch for Jetson (wheel from NVIDIA, NOT pip's default torch):
+#       # JetPack 4.6 / Python 3.6-3.8 / CUDA 10.2:
+#       pip3 install https://developer.download.nvidia.com/compute/redist/jp/v46/pytorch/torch-1.12.0a0+2c916ef.nv22.3-cp38-cp38-linux_aarch64.whl
+#       # JetPack 5.x / Python 3.8 / CUDA 11.x — check NVIDIA forums for latest wheel
+#
+# 4. Install torchvision for Jetson (build from source for your JetPack):
+#       git clone --branch v0.13.0 https://github.com/pytorch/vision torchvision
+#       cd torchvision && python3 setup.py install --user
+#
+# 5. THEN install packages below:
+#       pip3 install -r requirements.txt
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# TensorRT Export (recommended — gives ~3-4× speedup over PyTorch):
+#   After first run with .pt model, export once:
+#       from ultralytics import YOLO
+#       YOLO("yolov8n.pt").export(format="engine", half=True, device=0)
+#   Then set MODEL_PATH=yolov8n.engine in config.py or via env var.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Core computer vision & inference
+ultralytics>=8.0.0          # YOLOv8 (pulls in torch on non-Jetson; skip on Jetson)
+opencv-python-headless>=4.7 # Use system OpenCV on Jetson (see note above)
+numpy>=1.21,<2.0
+
+# Web API & dashboard
+flask>=3.0
+werkzeug>=3.0
+
+# Utilities
+Pillow>=9.0                  # Required by ultralytics for image I/O
+pyyaml>=6.0                  # ultralytics config parsing
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Optional — swap SceneCaptioner for a local small LLM (needs ~2 GB RAM):
+#   pip install llama-cpp-python   # quantised LLM inference via GGUF
+#   Model: TinyLlama-1.1B-Chat-v1.0.Q4_K_M.gguf (~700 MB)
+# ─────────────────────────────────────────────────────────────────────────────
