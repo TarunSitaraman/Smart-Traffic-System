@@ -162,6 +162,7 @@ def main() -> None:
 
     # ----- Thread 1: YOLOv8 detection -----
     detector = YOLOv8Detector(frame_buffer)
+    flask_api.set_detector(detector)
     det_thread = threading.Thread(
         target=detector.run, name="DetectorThread", daemon=True
     )

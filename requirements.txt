@@ -49,6 +49,9 @@ Pillow>=9.0                  # Required by ultralytics for image I/O
 pyyaml>=6.0                  # ultralytics config parsing
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Optional — public camera demo sources (demo_setup.py helper):
+#   pip install yt-dlp             # stream/download YouTube traffic cam footage
+#
 # Optional — swap SceneCaptioner for a local small LLM (needs ~2 GB RAM):
 #   pip install llama-cpp-python   # quantised LLM inference via GGUF
 #   Model: TinyLlama-1.1B-Chat-v1.0.Q4_K_M.gguf (~700 MB)

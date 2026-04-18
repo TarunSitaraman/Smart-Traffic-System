@@ -4,12 +4,23 @@
 
 import os
 
-# --- RTSP Camera ---
-RTSP_URL = os.getenv("RTSP_URL", "rtsp://admin:password@192.168.1.100:554/stream1")
-# Set to 0 for a USB webcam during local testing
+# --- Video Source ---
+# Accepts:  RTSP URL      rtsp://user:pass@host/stream
+#           HTTP MJPEG    http://host/mjpeg
+#           YouTube URL   https://www.youtube.com/watch?v=...  (needs yt-dlp)
+#           Local file    /path/to/traffic.mp4  (loops automatically)
+#           Webcam        0  (first USB camera)
+RTSP_URL = os.getenv(
+    "RTSP_URL",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                 "WhatsApp Video 2026-04-18 at 11.35.33 AM.mp4"),
+)
 CAMERA_WIDTH  = 1280
 CAMERA_HEIGHT = 720
 CAMERA_FPS    = 30
+
+# Loop local video files when they reach the end (set False to stop at EOF)
+VIDEO_LOOP = os.getenv("VIDEO_LOOP", "true").lower() != "false"
 
 # --- YOLOv8 Model ---
 # Use a lightweight model for Jetson Nano: yolov8n (nano) or yolov8s (small)
@@ -17,7 +28,7 @@ CAMERA_FPS    = 30
 MODEL_PATH       = os.getenv("MODEL_PATH", "yolov8n.pt")   # swap to yolov8n.engine after export
 CONFIDENCE_THRESH = float(os.getenv("CONF_THRESH", "0.45"))
 IOU_THRESH        = float(os.getenv("IOU_THRESH",  "0.50"))
-DEVICE            = os.getenv("DEVICE", "cuda")             # 'cuda' on Jetson, 'cpu' for testing
+DEVICE            = os.getenv("DEVICE", "cpu")              # 'cuda' on Jetson Nano, 'cpu' for local testing
 INFERENCE_IMG_SIZE = 640                                     # YOLOv8 input resolution
 
 # --- Detection Processing ---

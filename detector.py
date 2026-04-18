@@ -19,6 +19,7 @@ import numpy as np
 from ultralytics import YOLO
 
 import config
+import video_source as vs
 
 logger = logging.getLogger(__name__)
 
@@ -65,62 +66,9 @@ class FrameBuffer:
             return self._result
 
 
-# ---------------------------------------------------------------------------
-# GStreamer RTSP pipeline builder
-# ---------------------------------------------------------------------------
-
+# GStreamer pipeline builder kept here for video_source.py import compatibility
 def _build_gstreamer_pipeline(rtsp_url: str, width: int, height: int, fps: int) -> str:
-    """
-    Build an optimised GStreamer pipeline for the Jetson Nano.
-    Uses nvv4l2decoder for hardware H.264/H.265 decoding and
-    nvvidconv for colour-space conversion.
-
-    Falls back to a software pipeline if GStreamer is unavailable.
-    """
-    pipeline = (
-        f"rtspsrc location={rtsp_url} latency=100 ! "
-        "rtph264depay ! h264parse ! "
-        "nvv4l2decoder ! "                          # HW decoder on Jetson
-        f"nvvidconv ! "
-        f"video/x-raw,format=BGRx,width={width},height={height},framerate={fps}/1 ! "
-        "videoconvert ! "
-        "video/x-raw,format=BGR ! "
-        "appsink drop=1"
-    )
-    return pipeline
-
-
-def _open_capture(rtsp_url: str) -> cv2.VideoCapture:
-    """
-    Attempt to open the video capture with a GStreamer pipeline (Jetson).
-    Falls back to standard OpenCV RTSP handling for development environments.
-    """
-    # Try GStreamer first (Jetson Nano with JetPack)
-    gst_pipe = _build_gstreamer_pipeline(
-        rtsp_url,
-        config.CAMERA_WIDTH,
-        config.CAMERA_HEIGHT,
-        config.CAMERA_FPS,
-    )
-    cap = cv2.VideoCapture(gst_pipe, cv2.CAP_GSTREAMER)
-
-    if cap.isOpened():
-        logger.info("Opened stream via GStreamer pipeline")
-        return cap
-
-    # Fallback: plain OpenCV (works on desktops / testing)
-    logger.warning(
-        "GStreamer pipeline failed, falling back to cv2 direct RTSP (%s)", rtsp_url
-    )
-    cap = cv2.VideoCapture(rtsp_url)
-    if not cap.isOpened():
-        raise RuntimeError(f"Cannot open video source: {rtsp_url}")
-
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH,  config.CAMERA_WIDTH)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, config.CAMERA_HEIGHT)
-    cap.set(cv2.CAP_PROP_FPS,          config.CAMERA_FPS)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE,   1)   # keep latency minimal
-    return cap
+    return vs._build_gstreamer_pipeline(rtsp_url, width, height, fps)
 
 
 # ---------------------------------------------------------------------------
@@ -140,8 +88,11 @@ class YOLOv8Detector:
     """
 
     def __init__(self, frame_buffer: FrameBuffer) -> None:
-        self._buffer    = frame_buffer
-        self._stop_evt  = threading.Event()
+        self._buffer      = frame_buffer
+        self._stop_evt    = threading.Event()
+        self._switch_evt  = threading.Event()
+        self._next_source: Optional[str] = None
+        self._current_source: str = config.RTSP_URL
         self._frame_id  = 0
 
         logger.info("Loading YOLOv8 model from: %s", config.MODEL_PATH)
@@ -165,38 +116,60 @@ class YOLOv8Detector:
 
     def run(self) -> None:
         """
-        Main detection loop. Opens the RTSP stream, reads frames,
+        Main detection loop. Opens the configured source, reads frames,
         runs YOLOv8 inference, and pushes results into the FrameBuffer.
 
-        Automatically reconnects on stream loss.
+        Automatically reconnects on stream loss; loops local video files.
+        Responds to switch_source() calls between stream iterations.
         """
+        source_url = config.RTSP_URL
         while not self._stop_evt.is_set():
             cap = None
             try:
-                cap = _open_capture(config.RTSP_URL)
-                logger.info("Stream opened. Starting detection loop.")
-                self._detection_loop(cap)
+                self._current_source = source_url
+                cap, looping = vs.open_source(source_url)
+                logger.info("Source opened: %s (loop=%s)", source_url, looping)
+                self._detection_loop(cap, looping)
             except Exception as exc:
-                logger.error("Stream error: %s — reconnecting in 5 s", exc)
+                logger.error("Source error: %s — retrying in 5 s", exc)
                 time.sleep(5)
             finally:
                 if cap:
                     cap.release()
 
+            # Check for a source switch request
+            if self._switch_evt.is_set():
+                source_url = self._next_source
+                self._switch_evt.clear()
+                logger.info("Switching source to: %s", source_url)
+
     def stop(self) -> None:
         """Signal the detection loop to exit."""
         self._stop_evt.set()
+
+    def switch_source(self, url: str) -> None:
+        """Switch to a new video source without restarting the process."""
+        self._next_source = url
+        self._switch_evt.set()
+
+    @property
+    def current_source(self) -> str:
+        return self._current_source
 
     # ------------------------------------------------------------------
     # Internal loop
     # ------------------------------------------------------------------
 
-    def _detection_loop(self, cap: cv2.VideoCapture) -> None:
+    def _detection_loop(self, cap: cv2.VideoCapture, looping: bool = False) -> None:
         skip_counter = 0
 
-        while not self._stop_evt.is_set():
+        while not self._stop_evt.is_set() and not self._switch_evt.is_set():
             ret, frame = cap.read()
             if not ret or frame is None:
+                if looping:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    logger.debug("Video file EOF — looping from start")
+                    continue
                 logger.warning("Frame read failed — stream may have dropped.")
                 break
 

@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import config; import video_source; print\\('imports OK'\\)\")",
+      "Bash(pip install *)",
+      "Bash(python -m pip show opencv-python-headless)",
+      "Bash(python -m pip show opencv-python)",
+      "Bash(python -c \"import cv2; print\\(cv2.__version__\\)\")",
+      "Bash(python *)",
+      "Bash(where python *)",
+      "Bash(py -3 -c \"import cv2; print\\('cv2', cv2.__version__\\)\")",
+      "Bash(py -3 -c \"import yt_dlp; print\\('yt-dlp ok'\\)\")",
+      "Bash(py -3 -m pip install opencv-python yt-dlp)",
+      "Bash(py -3 -m pip list)",
+      "Bash(py -3 -m py_compile \"C:/Users/Tarun/Documents/Smart Traffic System/video_source.py\")",
+      "Bash(py -3 -m py_compile \"C:/Users/Tarun/Documents/Smart Traffic System/demo_setup.py\")",
+      "Bash(py -3 -m py_compile \"C:/Users/Tarun/Documents/Smart Traffic System/detector.py\")",
+      "Bash(py -3 -m py_compile \"C:/Users/Tarun/Documents/Smart Traffic System/config.py\")",
+      "Bash(py -3 -m py_compile \"C:/Users/Tarun/Documents/Smart Traffic System/api.py\")",
+      "Bash(py -3 -m py_compile \"C:/Users/Tarun/Documents/Smart Traffic System/main.py\")",
+      "Bash(where node *)",
+      "Bash(py -3 -m py_compile \"C:/Users/Tarun/Documents/Smart Traffic System/signal_controller.py\")"
+    ]
+  }
+}
