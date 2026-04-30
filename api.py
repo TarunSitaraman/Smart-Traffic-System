@@ -73,7 +73,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Smart Traffic System</title>
+  <title>Smart Traffic System — 4-Way Intersection</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; }
@@ -87,29 +87,25 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     .badge { background: #22c55e; color: #000; font-size: .7rem;
              padding: 2px 10px; border-radius: 99px; font-weight: 700; }
 
-    .layout { display: grid; grid-template-columns: 1fr 420px; gap: 16px; padding: 18px; }
-    @media(max-width:1000px){ .layout { grid-template-columns: 1fr; } }
+    .layout { display: grid; grid-template-columns: 1fr 520px; gap: 16px; padding: 18px; }
+    @media(max-width:1200px){ .layout { grid-template-columns: 1fr; } }
 
     .card { background: #1a1d2e; border-radius: 10px; border: 1px solid #2d3148; padding: 16px; }
     .card h2 { font-size: .75rem; text-transform: uppercase; letter-spacing: 1px;
                color: #64748b; margin-bottom: 14px; }
 
-    /* Stream */
     .stream img { width: 100%; border-radius: 6px; display: block; }
     .stream-label { font-size: .8rem; color: #38bdf8; margin-bottom: 8px; }
 
-    /* Caption */
     .caption-box { background: #0f1117; border-radius: 6px; padding: 11px 13px;
                    font-size: .88rem; line-height: 1.6; margin-top: 12px; min-height: 52px; }
     .inf-tag { font-size: .72rem; color: #4ade80; margin-top: 5px; text-align: right; }
 
-    /* Source switcher */
     .src-list { display: flex; flex-direction: column; gap: 7px; }
     .src-btn {
       background: #0f1117; border: 1px solid #2d3148; border-radius: 7px;
       color: #cbd5e1; padding: 9px 13px; cursor: pointer; font-size: .8rem;
-      display: flex; align-items: center; gap: 8px;
-      transition: background .15s, border-color .15s;
+      display: flex; align-items: center; gap: 8px; transition: background .15s, border-color .15s;
     }
     .src-btn:hover { background: #1e2235; border-color: #38bdf8; }
     .src-btn.active { background: #0c2340; border-color: #38bdf8; color: #fff; }
@@ -118,120 +114,90 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     .src-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
     .switch-note { font-size: .72rem; color: #facc15; margin-top: 8px; display: none; }
 
-    /* ── Traffic Light Control ── */
-    .tl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
-
-    .tl-signal {
-      background: #0f1117; border-radius: 10px; border: 2px solid #2d3148;
-      padding: 14px 10px; text-align: center; transition: border-color .3s, box-shadow .3s;
+    /* 4-Way Intersection Grid */
+    .intersection-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+      margin-bottom: 14px; background: #0a0d18; padding: 12px; border-radius: 8px;
     }
-    .tl-signal.green-active  { border-color: #22c55e; box-shadow: 0 0 20px #22c55e55; }
-    .tl-signal.red-active    { border-color: #ef4444; box-shadow: 0 0 10px #ef444422; }
-    .tl-signal.yellow-active { border-color: #eab308; box-shadow: 0 0 16px #eab30844; }
 
-    .tl-name { font-size: .72rem; text-transform: uppercase; letter-spacing: .8px;
-               color: #94a3b8; margin-bottom: 8px; }
-
-    /* Traffic light housing */
-    .tl-housing {
-      background: #111; border-radius: 10px; padding: 10px 8px;
-      width: 50px; margin: 0 auto 10px; display: flex; flex-direction: column; gap: 7px;
+    .direction-box {
+      background: #1a1d2e; border: 2px solid #2d3148; border-radius: 8px;
+      padding: 10px; text-align: center; transition: border-color .3s;
     }
-    .tl-bulb {
-      width: 30px; height: 30px; border-radius: 50%; opacity: .12;
-      transition: opacity .25s, box-shadow .25s;
+    .direction-box.active { border-color: #22c55e; box-shadow: 0 0 12px #22c55e44; }
+
+    .dir-name { font-size: .7rem; font-weight: 700; text-transform: uppercase;
+                color: #94a3b8; letter-spacing: .6px; margin-bottom: 6px; }
+
+    .signal-lights {
+      width: 40px; height: 90px; margin: 0 auto 8px; background: #000;
+      border-radius: 6px; padding: 6px; display: flex; flex-direction: column; gap: 4px;
     }
-    .tl-bulb.red    { background: #ef4444; }
-    .tl-bulb.yellow { background: #eab308; }
-    .tl-bulb.green  { background: #22c55e; }
-    .tl-bulb.on     { opacity: 1; }
-    .tl-bulb.red.on    { box-shadow: 0 0 16px #ef4444, 0 0 6px #ef4444; }
-    .tl-bulb.yellow.on { box-shadow: 0 0 16px #eab308, 0 0 6px #eab308; }
-    .tl-bulb.green.on  { box-shadow: 0 0 16px #22c55e, 0 0 6px #22c55e; }
 
-    /* Countdown — big visible number */
-    .tl-countdown {
-      font-size: 2rem; font-weight: 800; line-height: 1;
-      margin: 4px 0 2px; letter-spacing: -1px;
+    .light {
+      width: 28px; height: 24px; border-radius: 50%; margin: 0 auto;
+      opacity: .15; transition: opacity .25s, box-shadow .25s;
     }
-    .tl-countdown.col-green  { color: #22c55e; }
-    .tl-countdown.col-yellow { color: #eab308; }
-    .tl-countdown.col-red    { color: #ef4444; }
+    .light.red    { background: #ef4444; }
+    .light.yellow { background: #eab308; }
+    .light.green  { background: #22c55e; }
+    .light.on {
+      opacity: 1;
+    }
+    .light.red.on    { box-shadow: 0 0 12px #ef4444, 0 0 4px #ef4444; }
+    .light.yellow.on { box-shadow: 0 0 12px #eab308, 0 0 4px #eab308; }
+    .light.green.on  { box-shadow: 0 0 12px #22c55e, 0 0 4px #22c55e; }
 
-    /* Progress bar under countdown */
-    .tl-progress-wrap { background: #1e2235; border-radius: 4px; height: 5px; margin: 4px 6px 8px; }
-    .tl-progress { height: 5px; border-radius: 4px; transition: width 1s linear, background .3s; }
+    .countdown { font-size: 1.4rem; font-weight: 800; line-height: 1; margin: 4px 0; }
+    .countdown.green  { color: #22c55e; }
+    .countdown.red    { color: #ef4444; }
+    .countdown.yellow { color: #eab308; }
 
-    .tl-suggest  { font-size: .78rem; font-weight: 700; color: #38bdf8; margin-top: 4px; }
-    .tl-vehicles { font-size: .73rem; color: #94a3b8; margin-top: 2px; }
-    .tl-pcu      { font-size: .68rem; color: #4b5563; margin-top: 2px; }
+    .dir-pcu { font-size: .68rem; color: #64748b; margin-top: 4px; }
+    .dir-veh { font-size: .65rem; color: #4b5563; }
 
-    /* Density bar */
-    .density-bar-wrap { background: #1e2235; border-radius: 4px; height: 6px; margin: 6px 4px 2px; }
-    .density-bar { height: 6px; border-radius: 4px; transition: width .8s ease, background .4s; }
+    /* Phase indicator */
+    .phase-info {
+      background: #0a0d18; border-left: 3px solid #38bdf8; border-radius: 0 4px 4px 0;
+      padding: 10px 12px; font-size: .8rem; color: #cbd5e1; line-height: 1.4;
+      margin-bottom: 14px;
+    }
+    .phase-info strong { color: #38bdf8; }
 
-    /* Density badge */
-    .dlvl { display: inline-block; padding: 1px 7px; border-radius: 99px;
-            font-size: .65rem; font-weight: 700; margin-top: 4px; }
-    .dlvl-LOW    { background: #14532d; color: #4ade80; }
-    .dlvl-MEDIUM { background: #713f12; color: #fbbf24; }
-    .dlvl-HIGH   { background: #7f1d1d; color: #f87171; }
-
-    /* PCU breakdown chips */
-    .breakdown { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-top: 6px; }
-    .chip { background: #1e2235; border-radius: 4px; padding: 2px 6px; font-size: .65rem; color: #94a3b8; }
-
-    /* Formula box */
     .formula-box {
       background: #0a0d18; border: 1px solid #2d3148; border-radius: 6px;
-      padding: 9px 12px; font-size: .72rem; color: #64748b;
-      font-family: 'Courier New', monospace; line-height: 1.8; margin-bottom: 12px;
+      padding: 9px 12px; font-size: .7rem; color: #64748b;
+      font-family: 'Courier New', monospace; line-height: 1.6; margin-bottom: 12px;
       white-space: pre;
     }
     .formula-box .hl { color: #38bdf8; }
 
-    /* Cycle timeline */
-    .cycle-bar { display: flex; height: 20px; border-radius: 6px; overflow: hidden; margin-bottom: 12px; }
-    .cb-seg {
-      display: flex; align-items: center; justify-content: center;
-      font-size: .6rem; font-weight: 700; color: #000; transition: flex 1s ease;
-      min-width: 0;
-    }
-    .cb-green  { background: #22c55e; }
-    .cb-yellow { background: #eab308; }
-    .cb-red    { background: #ef4444; color: #fff; }
-    .cb-allred { background: #374151; color: #9ca3af; }
+    .density-bar-wrap { background: #1e2235; border-radius: 3px; height: 4px; margin: 2px 0; }
+    .density-bar { height: 4px; border-radius: 3px; transition: width .8s ease, background .4s; }
 
-    /* Reason bar */
-    .reason-bar {
-      background: #0f1117; border-left: 3px solid #38bdf8;
-      border-radius: 0 6px 6px 0; padding: 10px 13px;
-      font-size: .82rem; color: #cbd5e1; line-height: 1.5; margin-top: 12px;
-    }
-    .reason-bar .phase-label { font-weight: 700; color: #38bdf8; }
+    .breakdown { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; margin-top: 4px; }
+    .chip { background: #1e2235; border-radius: 3px; padding: 2px 5px; font-size: .6rem; color: #94a3b8; }
   </style>
 </head>
 <body>
 <header>
-  <h1>🚦 Smart Traffic Signal Control — YOLOv8 Edge AI</h1>
+  <h1>🚦 Smart Traffic Signal Control — 4-Way Intersection</h1>
   <span class="badge" id="status">● LIVE</span>
 </header>
 
 <div class="layout">
-
   <!-- LEFT: stream + caption -->
   <div style="display:flex;flex-direction:column;gap:16px;">
-    <div class="card stream">
+    <div class="card">
       <div class="stream-label" id="src-label">Loading source…</div>
-      <img src="/live" alt="Live feed"/>
+      <img src="/live" alt="Live feed" style="width:100%;border-radius:6px;display:block;"/>
       <div class="caption-box" id="caption">Waiting for first frame…</div>
       <div class="inf-tag" id="inf-time"></div>
     </div>
   </div>
 
-  <!-- RIGHT: controls -->
+  <!-- RIGHT: 4-way control panel -->
   <div style="display:flex;flex-direction:column;gap:16px;">
-
     <!-- Source switcher -->
     <div class="card">
       <h2>Video Source</h2>
@@ -241,71 +207,79 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 
     <!-- Traffic Signal Control -->
     <div class="card">
-      <h2>Adaptive Signal Timing — Webster's Method</h2>
+      <h2>Webster Adaptive Signal Control</h2>
 
-      <!-- Formula display -->
-      <div class="formula-box" id="formula-box">
-        Waiting for detection data…
+      <!-- Current phase -->
+      <div class="phase-info" id="phase-info">
+        <strong>N/S GREEN</strong> — 18s remaining. E/W holding on RED.
       </div>
 
-      <!-- Cycle timeline bar -->
-      <div class="cycle-bar" id="cycle-bar">
-        <div class="cb-seg cb-green"  id="cb-ga" style="flex:30">A</div>
-        <div class="cb-seg cb-yellow" style="flex:3">Y</div>
-        <div class="cb-seg cb-allred" style="flex:1"></div>
-        <div class="cb-seg cb-red"    id="cb-gb" style="flex:30">B</div>
-        <div class="cb-seg cb-yellow" style="flex:3">Y</div>
-        <div class="cb-seg cb-allred" style="flex:1"></div>
-      </div>
-
-      <div class="tl-grid">
-        <!-- Direction A: Main Road -->
-        <div class="tl-signal" id="sig-a">
-          <div class="tl-name">Main Road</div>
-          <div class="tl-housing">
-            <div class="tl-bulb red"    id="a-red"></div>
-            <div class="tl-bulb yellow" id="a-yellow"></div>
-            <div class="tl-bulb green"  id="a-green"></div>
+      <!-- 4-way intersection visualization -->
+      <div class="intersection-grid">
+        <!-- North -->
+        <div class="direction-box" id="dir-n" style="grid-column: 1 / 2; grid-row: 1;">
+          <div class="dir-name">North ↓</div>
+          <div class="signal-lights">
+            <div class="light red"    id="light-n-red"></div>
+            <div class="light yellow" id="light-n-yellow"></div>
+            <div class="light green"  id="light-n-green"></div>
           </div>
-          <div class="tl-countdown col-green" id="cd-a">—</div>
-          <div class="tl-progress-wrap"><div class="tl-progress" id="prog-a" style="width:100%;background:#22c55e"></div></div>
-          <div class="tl-suggest"  id="sug-a">— s green</div>
-          <div class="tl-vehicles" id="veh-a">— vehicles</div>
-          <div class="tl-pcu"      id="pcu-a">PCU: —</div>
-          <div class="density-bar-wrap"><div class="density-bar" id="dbar-a" style="width:0%"></div></div>
-          <div><span class="dlvl dlvl-LOW" id="dlvl-a">LOW</span></div>
-          <div class="breakdown" id="bdwn-a"></div>
+          <div class="countdown" id="cd-n">—</div>
+          <div class="dir-pcu" id="pcu-n">PCU: —</div>
+          <div class="dir-veh" id="veh-n">— vehicles</div>
         </div>
 
-        <!-- Direction B: Cross Road -->
-        <div class="tl-signal" id="sig-b">
-          <div class="tl-name">Cross Road</div>
-          <div class="tl-housing">
-            <div class="tl-bulb red"    id="b-red"></div>
-            <div class="tl-bulb yellow" id="b-yellow"></div>
-            <div class="tl-bulb green"  id="b-green"></div>
+        <!-- East (top right) -->
+        <div class="direction-box" id="dir-e" style="grid-column: 2 / 3; grid-row: 1;">
+          <div class="dir-name">East ←</div>
+          <div class="signal-lights">
+            <div class="light red"    id="light-e-red"></div>
+            <div class="light yellow" id="light-e-yellow"></div>
+            <div class="light green"  id="light-e-green"></div>
           </div>
-          <div class="tl-countdown col-red" id="cd-b">—</div>
-          <div class="tl-progress-wrap"><div class="tl-progress" id="prog-b" style="width:0%;background:#ef4444"></div></div>
-          <div class="tl-suggest"  id="sug-b">— s green</div>
-          <div class="tl-vehicles" id="veh-b">— vehicles</div>
-          <div class="tl-pcu"      id="pcu-b">PCU: —</div>
-          <div class="density-bar-wrap"><div class="density-bar" id="dbar-b" style="width:0%"></div></div>
-          <div><span class="dlvl dlvl-LOW" id="dlvl-b">LOW</span></div>
-          <div class="breakdown" id="bdwn-b"></div>
+          <div class="countdown" id="cd-e">—</div>
+          <div class="dir-pcu" id="pcu-e">PCU: —</div>
+          <div class="dir-veh" id="veh-e">— vehicles</div>
+        </div>
+
+        <!-- South (bottom left) -->
+        <div class="direction-box" id="dir-s" style="grid-column: 1 / 2; grid-row: 2;">
+          <div class="dir-name">South ↑</div>
+          <div class="signal-lights">
+            <div class="light red"    id="light-s-red"></div>
+            <div class="light yellow" id="light-s-yellow"></div>
+            <div class="light green"  id="light-s-green"></div>
+          </div>
+          <div class="countdown" id="cd-s">—</div>
+          <div class="dir-pcu" id="pcu-s">PCU: —</div>
+          <div class="dir-veh" id="veh-s">— vehicles</div>
+        </div>
+
+        <!-- West (bottom right) -->
+        <div class="direction-box" id="dir-w" style="grid-column: 2 / 3; grid-row: 2;">
+          <div class="dir-name">West →</div>
+          <div class="signal-lights">
+            <div class="light red"    id="light-w-red"></div>
+            <div class="light yellow" id="light-w-yellow"></div>
+            <div class="light green"  id="light-w-green"></div>
+          </div>
+          <div class="countdown" id="cd-w">—</div>
+          <div class="dir-pcu" id="pcu-w">PCU: —</div>
+          <div class="dir-veh" id="veh-w">— vehicles</div>
         </div>
       </div>
 
-      <!-- Phase status -->
-      <div class="reason-bar" id="reason-bar">Waiting for detection data…</div>
+      <!-- Formula box -->
+      <div class="formula-box" id="formula-box">Waiting for data…</div>
     </div>
-
-  </div><!-- /right -->
+  </div>
 </div>
 
 <script>
-  // ── Source switcher ────────────────────────────────────────────────
   let sources = [], currentSrc = '';
+  let phaseEnd = 0, phaseTotal = 30;
+  let nsGreen = 30, ewGreen = 30;
+  let currentPhase = 'ns-green';
 
   async function loadSources() {
     const r = await fetch('/api/sources');
@@ -348,134 +322,92 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     } catch(e){}
   }
 
-  // ── Traffic Signal Logic ────────────────────────────────────────────
-  let phase      = 'a-green';
-  let phaseEnd   = 0;
-  let phaseTotal = 30;          // duration of current phase at the moment it started
-  let sugA = 30, sugB = 30;
-  let yellA = 3, yellB = 3;
-
   function setLight(dir, state) {
     ['red','yellow','green'].forEach(c =>
-      document.getElementById(`${dir}-${c}`).classList.toggle('on', c === state)
+      document.getElementById(`light-${dir}-${c}`).classList.toggle('on', c === state)
     );
-    document.getElementById(`sig-${dir}`).className = 'tl-signal ' + state + '-active';
   }
 
   function advancePhase() {
     if (Date.now() < phaseEnd) return;
-    switch(phase) {
-      case 'a-green':  phase = 'a-yellow'; phaseTotal = yellA; phaseEnd = Date.now() + yellA * 1000; break;
-      case 'a-yellow': phase = 'b-green';  phaseTotal = sugB;  phaseEnd = Date.now() + sugB  * 1000; break;
-      case 'b-green':  phase = 'b-yellow'; phaseTotal = yellB; phaseEnd = Date.now() + yellB * 1000; break;
-      case 'b-yellow': phase = 'a-green';  phaseTotal = sugA;  phaseEnd = Date.now() + sugA  * 1000; break;
-    }
+    currentPhase = currentPhase === 'ns-green' ? 'ew-green' : 'ns-green';
+    const duration = currentPhase === 'ns-green' ? nsGreen : ewGreen;
+    phaseTotal = duration;
+    phaseEnd = Date.now() + duration * 1000;
   }
 
   function renderSignals() {
-    const now  = Date.now();
-    const rem  = Math.max(0, Math.ceil((phaseEnd - now) / 1000));
-    const isA  = phase.startsWith('a');
-    const isY  = phase.endsWith('yellow');
-    const col  = isY ? '#eab308' : (isA ? '#22c55e' : '#ef4444');
-    const colCls = isY ? 'col-yellow' : (isA ? 'col-green' : 'col-red');
-    const pct  = (phaseTotal > 0 ? (rem / phaseTotal) * 100 : 0).toFixed(1) + '%';
+    const now = Date.now();
+    const rem = Math.max(0, Math.ceil((phaseEnd - now) / 1000));
+    const isNS = currentPhase === 'ns-green';
 
-    if      (phase === 'a-green')  { setLight('a','green');  setLight('b','red');    }
-    else if (phase === 'a-yellow') { setLight('a','yellow'); setLight('b','red');    }
-    else if (phase === 'b-green')  { setLight('a','red');    setLight('b','green');  }
-    else                           { setLight('a','red');    setLight('b','yellow'); }
+    // Set lights
+    if (isNS) {
+      setLight('n', 'green');
+      setLight('s', 'green');
+      setLight('e', 'red');
+      setLight('w', 'red');
+    } else {
+      setLight('n', 'red');
+      setLight('s', 'red');
+      setLight('e', 'green');
+      setLight('w', 'green');
+    }
 
-    const actDir = isA ? 'a' : 'b';
-    const idlDir = isA ? 'b' : 'a';
+    // Update boxes
+    document.getElementById('dir-n').classList.toggle('active', isNS);
+    document.getElementById('dir-s').classList.toggle('active', isNS);
+    document.getElementById('dir-e').classList.toggle('active', !isNS);
+    document.getElementById('dir-w').classList.toggle('active', !isNS);
 
-    // Active direction: show countdown + filling progress bar
-    const cdAct = document.getElementById('cd-' + actDir);
-    cdAct.textContent = rem + 's';
-    cdAct.className = 'tl-countdown ' + colCls;
-    const progAct = document.getElementById('prog-' + actDir);
-    progAct.style.width      = pct;
-    progAct.style.background = col;
+    // Countdowns
+    const greenDirs = isNS ? ['n','s'] : ['e','w'];
+    greenDirs.forEach(d => {
+      const el = document.getElementById('cd-'+d);
+      el.textContent = rem + 's';
+      el.className = 'countdown green';
+    });
+    const redDirs = isNS ? ['e','w'] : ['n','s'];
+    redDirs.forEach(d => {
+      const el = document.getElementById('cd-'+d);
+      el.textContent = '—';
+      el.className = 'countdown red';
+    });
 
-    // Idle direction: dash + empty bar
-    const cdIdle = document.getElementById('cd-' + idlDir);
-    cdIdle.textContent = '—';
-    cdIdle.className = 'tl-countdown col-red';
-    const progIdle = document.getElementById('prog-' + idlDir);
-    progIdle.style.width      = '0%';
-    progIdle.style.background = '#ef4444';
-
-    const phaseLabels = {
-      'a-green':  `<span class="phase-label">Main Road GREEN</span> — ${rem}s remaining. Cross Road holding on RED.`,
-      'a-yellow': `<span class="phase-label">Main Road YELLOW</span> — clearing intersection (${rem}s). Cross Road next.`,
-      'b-green':  `<span class="phase-label">Cross Road GREEN</span> — ${rem}s remaining. Main Road holding on RED.`,
-      'b-yellow': `<span class="phase-label">Cross Road YELLOW</span> — clearing intersection (${rem}s). Main Road next.`,
-    };
-    document.getElementById('reason-bar').innerHTML = phaseLabels[phase];
-  }
-
-  function renderDensityBar(id, pcu, totalPcu) {
-    const pct = totalPcu > 0 ? Math.min(100, (pcu / totalPcu) * 100) : 50;
-    const el  = document.getElementById(id);
-    el.style.width = pct.toFixed(1) + '%';
-    el.style.background = pct > 65 ? '#ef4444' : pct > 35 ? '#eab308' : '#22c55e';
-  }
-
-  function renderDensityLevel(id, level) {
-    const el = document.getElementById(id);
-    el.textContent = level;
-    el.className = `dlvl dlvl-${level}`;
-  }
-
-  function renderBreakdown(id, bdwn) {
-    const el = document.getElementById(id);
-    el.innerHTML = Object.entries(bdwn)
-      .sort((a,b) => b[1]-a[1])
-      .map(([cls, pcu]) => `<span class="chip">${cls} ${pcu.toFixed(1)}</span>`)
-      .join('');
+    // Phase info
+    const msg = isNS
+      ? `<strong>N/S GREEN</strong> — ${rem}s remaining. E/W holding on RED.`
+      : `<strong>E/W GREEN</strong> — ${rem}s remaining. N/S holding on RED.`;
+    document.getElementById('phase-info').innerHTML = msg;
   }
 
   async function refreshTimings() {
     try {
       const d = await (await fetch('/api/traffic_timing')).json();
-      const mr = d.main_road, cr = d.cross_road;
 
-      sugA  = mr.suggested_green;
-      sugB  = cr.suggested_green;
-      yellA = mr.yellow || 3;
-      yellB = cr.yellow || 3;
+      nsGreen = d.north.suggested_green;
+      ewGreen = d.east.suggested_green;
 
-      // Signal cards
-      document.getElementById('sug-a').textContent  = `${sugA}s green`;
-      document.getElementById('sug-b').textContent  = `${sugB}s green`;
-      document.getElementById('veh-a').textContent  = `${mr.vehicle_count} vehicles`;
-      document.getElementById('veh-b').textContent  = `${cr.vehicle_count} vehicles`;
-      document.getElementById('pcu-a').textContent  = `PCU: ${mr.pcu.toFixed(2)}  y=${mr.flow_ratio.toFixed(3)}`;
-      document.getElementById('pcu-b').textContent  = `PCU: ${cr.pcu.toFixed(2)}  y=${cr.flow_ratio.toFixed(3)}`;
+      const dirs = ['north', 'south', 'east', 'west'];
+      const shortDirs = ['n', 's', 'e', 'w'];
 
-      renderDensityBar('dbar-a', mr.pcu, d.total_pcu);
-      renderDensityBar('dbar-b', cr.pcu, d.total_pcu);
-      renderDensityLevel('dlvl-a', mr.density_level);
-      renderDensityLevel('dlvl-b', cr.density_level);
-      renderBreakdown('bdwn-a', mr.breakdown || {});
-      renderBreakdown('bdwn-b', cr.breakdown || {});
+      dirs.forEach((dir, i) => {
+        const sd = shortDirs[i];
+        const data = d[dir];
+        document.getElementById('pcu-'+sd).textContent = `PCU: ${data.pcu.toFixed(2)}`;
+        document.getElementById('veh-'+sd).textContent = `${data.vehicle_count} vehicles`;
+      });
 
-      // Cycle timeline bar proportions
-      document.getElementById('cb-ga').style.flex = sugA;
-      document.getElementById('cb-gb').style.flex = sugB;
-
-      // Formula box
       document.getElementById('formula-box').innerHTML =
-        `<span class="hl">PCU weights:</span> car=1.0 · truck/bus=2.5 · moto=0.5 · bicycle=0.3 · person=0.2\n` +
-        `<span class="hl">Lane density:</span> Main=${mr.pcu.toFixed(2)} PCU  Cross=${cr.pcu.toFixed(2)} PCU\n` +
-        `<span class="hl">Flow ratios:</span>  y_A=${mr.flow_ratio.toFixed(3)}  y_B=${cr.flow_ratio.toFixed(3)}  Y=${d.y_total.toFixed(3)}\n` +
-        `<span class="hl">Webster:</span>      C = (1.5L+5)/(1−Y) = ${d.cycle_length}s  (L=${d.lost_time}s)\n` +
-        `<span class="hl">Green split:</span>  Main=${sugA}s (${(mr.flow_ratio/d.y_total*100||50).toFixed(1)}%)  Cross=${sugB}s (${(cr.flow_ratio/d.y_total*100||50).toFixed(1)}%)`;
+        `<span class="hl">N/S Green:</span> ${nsGreen}s (${d.north.flow_ratio.toFixed(3)})\n` +
+        `<span class="hl">E/W Green:</span> ${ewGreen}s (${d.east.flow_ratio.toFixed(3)})\n` +
+        `<span class="hl">Cycle:</span> ${d.cycle_length}s  Lost Time: ${d.lost_time}s  Y_total: ${d.y_total.toFixed(3)}\n` +
+        `<span class="hl">Formula:</span> C = (1.5×${d.lost_time}+5)/(1−${d.y_total.toFixed(3)}) = ${d.cycle_length}s`;
 
-      // Caption
-      document.getElementById('caption').textContent  = d.caption || '—';
-      document.getElementById('inf-time').textContent = d.inference_ms
-        ? `Inference: ${d.inference_ms.toFixed(1)} ms` : '';
+      document.getElementById('caption').textContent = d.caption || '—';
+      if (d.inference_ms) {
+        document.getElementById('inf-time').textContent = `Inference: ${d.inference_ms.toFixed(1)} ms`;
+      }
 
       document.getElementById('status').textContent = '● LIVE';
     } catch(e) {
@@ -483,8 +415,8 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     }
   }
 
-  phaseEnd   = Date.now() + sugA * 1000;
-  phaseTotal = sugA;
+  phaseEnd = Date.now() + nsGreen * 1000;
+  phaseTotal = nsGreen;
   setInterval(() => { advancePhase(); renderSignals(); }, 1000);
   setInterval(refreshTimings, 3000);
 
@@ -593,34 +525,73 @@ def api_switch_source():
 def api_traffic_timing():
     """
     Webster-based adaptive signal timing from recent YOLOv8 detections.
+    Returns 4-way intersection timings (north, south, east, west).
     See signal_controller.py for the full mathematical model.
     """
+    from signal_controller import PCU_WEIGHTS
+
     recent = db.get_recent_detections(limit=60)
     result = _frame_buffer.get() if _frame_buffer else None
     inf_ms = result.inference_ms if result else None
     caption = recent[0]["scene_caption"] if recent else "Awaiting detections…"
 
-    cycle = _signal_ctrl.compute(recent)
-    mr, cr = cycle.main_road, cycle.cross_road
+    # Build lane_data from detections, matching signal_controller.compute() input
+    lane_data = {
+        "north": {"pcu": 0.0, "vehicle_count": 0, "breakdown": {}},
+        "south": {"pcu": 0.0, "vehicle_count": 0, "breakdown": {}},
+        "east":  {"pcu": 0.0, "vehicle_count": 0, "breakdown": {}},
+        "west":  {"pcu": 0.0, "vehicle_count": 0, "breakdown": {}},
+    }
+
+    for det in recent:
+        lane = det.get("lane", "unknown")
+        if lane not in lane_data:
+            continue
+
+        cls_name = det.get("class_name", "unknown")
+        pcu = PCU_WEIGHTS.get(cls_name, 0.0)
+        lane_data[lane]["pcu"] += pcu
+        lane_data[lane]["vehicle_count"] += 1
+        lane_data[lane]["breakdown"][cls_name] = lane_data[lane]["breakdown"].get(cls_name, 0.0) + pcu
+
+    cycle = _signal_ctrl.compute(lane_data)
 
     return jsonify({
-        "main_road": {
-            "vehicle_count":  mr.vehicle_count,
-            "pcu":            mr.pcu,
-            "flow_ratio":     mr.flow_ratio,
-            "suggested_green": mr.green,
-            "yellow":         mr.yellow,
-            "density_level":  mr.density_level,
-            "breakdown":      mr.breakdown,
+        "north": {
+            "vehicle_count":   cycle.north.vehicle_count,
+            "pcu":             cycle.north.pcu,
+            "flow_ratio":      cycle.north.flow_ratio,
+            "suggested_green": cycle.north.green,
+            "yellow":          cycle.north.yellow,
+            "density_level":   cycle.north.density_level,
+            "breakdown":       cycle.north.breakdown,
         },
-        "cross_road": {
-            "vehicle_count":  cr.vehicle_count,
-            "pcu":            cr.pcu,
-            "flow_ratio":     cr.flow_ratio,
-            "suggested_green": cr.green,
-            "yellow":         cr.yellow,
-            "density_level":  cr.density_level,
-            "breakdown":      cr.breakdown,
+        "south": {
+            "vehicle_count":   cycle.south.vehicle_count,
+            "pcu":             cycle.south.pcu,
+            "flow_ratio":      cycle.south.flow_ratio,
+            "suggested_green": cycle.south.green,
+            "yellow":          cycle.south.yellow,
+            "density_level":   cycle.south.density_level,
+            "breakdown":       cycle.south.breakdown,
+        },
+        "east": {
+            "vehicle_count":   cycle.east.vehicle_count,
+            "pcu":             cycle.east.pcu,
+            "flow_ratio":      cycle.east.flow_ratio,
+            "suggested_green": cycle.east.green,
+            "yellow":          cycle.east.yellow,
+            "density_level":   cycle.east.density_level,
+            "breakdown":       cycle.east.breakdown,
+        },
+        "west": {
+            "vehicle_count":   cycle.west.vehicle_count,
+            "pcu":             cycle.west.pcu,
+            "flow_ratio":      cycle.west.flow_ratio,
+            "suggested_green": cycle.west.green,
+            "yellow":          cycle.west.yellow,
+            "density_level":   cycle.west.density_level,
+            "breakdown":       cycle.west.breakdown,
         },
         "cycle_length":  cycle.cycle_length,
         "lost_time":     cycle.lost_time,

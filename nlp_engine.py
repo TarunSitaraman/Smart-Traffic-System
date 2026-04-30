@@ -48,19 +48,19 @@ _COUNT_PHRASES = {
 
 _ALERT_TEMPLATES = {
     "CRITICAL": [
-        "⚠️  CRITICAL ALERT: {count} {obj} detected with {conf:.0%} confidence at {time}.",
-        "🚨  CRITICAL: {obj} identified — confidence {conf:.0%}. Immediate attention required.",
+        "[CRITICAL] ALERT: {count} {obj} detected with {conf:.0%} confidence at {time}.",
+        "[CRITICAL] {obj} identified — confidence {conf:.0%}. Immediate attention required.",
     ],
     "HIGH": [
-        "🔴  HIGH: {count} {obj} detected ({conf:.0%} confidence) at {time}.",
-        "❗  HIGH ALERT: {obj} present in frame. Confidence: {conf:.0%}.",
+        "[HIGH] HIGH: {count} {obj} detected ({conf:.0%} confidence) at {time}.",
+        "[HIGH] ALERT: {obj} present in frame. Confidence: {conf:.0%}.",
     ],
     "MEDIUM": [
-        "🟡  MEDIUM: {count} {obj} spotted ({conf:.0%} confidence) — {time}.",
-        "⚡  NOTICE: {obj} detected. Confidence {conf:.0%}.",
+        "[NOTICE] MEDIUM: {count} {obj} spotted ({conf:.0%} confidence) — {time}.",
+        "[NOTICE] {obj} detected. Confidence {conf:.0%}.",
     ],
     "LOW": [
-        "🟢  LOW: {obj} detected at {conf:.0%} confidence.",
+        "[INFO] LOW: {obj} detected at {conf:.0%} confidence.",
     ],
 }
 

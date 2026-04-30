@@ -54,10 +54,45 @@ def init_db() -> None:
             frame_id    INTEGER
         );
 
+        CREATE TABLE IF NOT EXISTS accidents (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id        INTEGER UNIQUE NOT NULL,
+            timestamp       TEXT    NOT NULL,
+            lane            TEXT    NOT NULL,
+            track_id        INTEGER,
+            secondary_track_id INTEGER,
+            accident_type   TEXT    NOT NULL,
+            confidence      REAL    NOT NULL,
+            score_breakdown TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS signal_events (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp   TEXT    NOT NULL,
+            lane        TEXT    NOT NULL,
+            state       TEXT    NOT NULL,
+            duration_sec REAL
+        );
+
+        CREATE TABLE IF NOT EXISTS lane_metrics (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp      TEXT    NOT NULL,
+            lane           TEXT    NOT NULL,
+            vehicle_count  INTEGER NOT NULL,
+            queue_length   REAL,
+            density        REAL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_detections_ts    ON detections(timestamp);
         CREATE INDEX IF NOT EXISTS idx_detections_class ON detections(class_name);
         CREATE INDEX IF NOT EXISTS idx_alerts_ts        ON alerts(timestamp);
         CREATE INDEX IF NOT EXISTS idx_alerts_severity  ON alerts(severity);
+        CREATE INDEX IF NOT EXISTS idx_accidents_ts     ON accidents(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_accidents_lane   ON accidents(lane);
+        CREATE INDEX IF NOT EXISTS idx_signals_ts       ON signal_events(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_signals_lane     ON signal_events(lane);
+        CREATE INDEX IF NOT EXISTS idx_lanes_ts         ON lane_metrics(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_lanes_lane       ON lane_metrics(lane);
     """)
     conn.commit()
     logger.info("Database initialised at %s", config.DB_PATH)
@@ -181,6 +216,93 @@ def get_detection_stats() -> Dict[str, Any]:
     }
 
 
+def insert_accident(
+    event_id: int,
+    timestamp: float,
+    lane: str,
+    track_id: int,
+    secondary_track_id: Optional[int],
+    accident_type: str,
+    confidence: float,
+    score_breakdown: Optional[str] = None,
+) -> None:
+    """Persist an accident event."""
+    ts = datetime.utcfromtimestamp(timestamp).isoformat(timespec="milliseconds")
+    conn = _get_conn()
+    conn.execute(
+        """INSERT OR IGNORE INTO accidents
+           (event_id, timestamp, lane, track_id, secondary_track_id, accident_type, confidence, score_breakdown)
+           VALUES (?,?,?,?,?,?,?,?)""",
+        (event_id, ts, lane, track_id, secondary_track_id, accident_type, round(confidence, 4), score_breakdown),
+    )
+    conn.commit()
+
+
+def insert_signal_event(
+    timestamp: float,
+    lane: str,
+    state: str,
+    duration_sec: float,
+) -> None:
+    """Persist a traffic signal state change."""
+    ts = datetime.utcfromtimestamp(timestamp).isoformat(timespec="milliseconds")
+    conn = _get_conn()
+    conn.execute(
+        """INSERT INTO signal_events (timestamp, lane, state, duration_sec)
+           VALUES (?,?,?,?)""",
+        (ts, lane, state, round(duration_sec, 2)),
+    )
+    conn.commit()
+
+
+def insert_lane_metric(
+    timestamp: float,
+    lane: str,
+    vehicle_count: int,
+    queue_length: Optional[float] = None,
+    density: Optional[float] = None,
+) -> None:
+    """Persist a lane traffic metric."""
+    ts = datetime.utcfromtimestamp(timestamp).isoformat(timespec="milliseconds")
+    conn = _get_conn()
+    conn.execute(
+        """INSERT INTO lane_metrics (timestamp, lane, vehicle_count, queue_length, density)
+           VALUES (?,?,?,?,?)""",
+        (ts, lane, vehicle_count, queue_length, density),
+    )
+    conn.commit()
+
+
+def get_accidents_in_range(start_iso: str, end_iso: str) -> List[Dict]:
+    """Get accidents between timestamps (ISO format)."""
+    conn = _get_conn()
+    cur = conn.execute(
+        "SELECT * FROM accidents WHERE timestamp >= ? AND timestamp <= ? ORDER BY timestamp",
+        (start_iso, end_iso),
+    )
+    return [dict(row) for row in cur.fetchall()]
+
+
+def get_signal_events_in_range(start_iso: str, end_iso: str) -> List[Dict]:
+    """Get signal events between timestamps (ISO format)."""
+    conn = _get_conn()
+    cur = conn.execute(
+        "SELECT * FROM signal_events WHERE timestamp >= ? AND timestamp <= ? ORDER BY timestamp",
+        (start_iso, end_iso),
+    )
+    return [dict(row) for row in cur.fetchall()]
+
+
+def get_lane_metrics_in_range(start_iso: str, end_iso: str) -> List[Dict]:
+    """Get lane metrics between timestamps (ISO format)."""
+    conn = _get_conn()
+    cur = conn.execute(
+        "SELECT * FROM lane_metrics WHERE timestamp >= ? AND timestamp <= ? ORDER BY timestamp",
+        (start_iso, end_iso),
+    )
+    return [dict(row) for row in cur.fetchall()]
+
+
 def purge_old_records() -> None:
     """Delete records older than DB_RETENTION_DAYS. No-op if retention is 0."""
     if config.DB_RETENTION_DAYS <= 0:
@@ -189,5 +311,8 @@ def purge_old_records() -> None:
     conn = _get_conn()
     conn.execute("DELETE FROM detections WHERE timestamp < ?", (cutoff,))
     conn.execute("DELETE FROM alerts     WHERE timestamp < ?", (cutoff,))
+    conn.execute("DELETE FROM accidents  WHERE timestamp < ?", (cutoff,))
+    conn.execute("DELETE FROM signal_events WHERE timestamp < ?", (cutoff,))
+    conn.execute("DELETE FROM lane_metrics WHERE timestamp < ?", (cutoff,))
     conn.commit()
     logger.debug("Purged records older than %s days", config.DB_RETENTION_DAYS)

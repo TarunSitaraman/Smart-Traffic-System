@@ -19,7 +19,10 @@
       "Bash(py -3 -m py_compile \"C:/Users/Tarun/Documents/Smart Traffic System/api.py\")",
       "Bash(py -3 -m py_compile \"C:/Users/Tarun/Documents/Smart Traffic System/main.py\")",
       "Bash(where node *)",
-      "Bash(py -3 -m py_compile \"C:/Users/Tarun/Documents/Smart Traffic System/signal_controller.py\")"
+      "Bash(py -3 -m py_compile \"C:/Users/Tarun/Documents/Smart Traffic System/signal_controller.py\")",
+      "Bash(SIMULATOR_ENABLED=true SIMULATOR_SCENARIO=normal python main.py)",
+      "Bash(pkill -f \"python main.py\")",
+      "Bash(timeout 15 bash -c \"SIMULATOR_ENABLED=true SIMULATOR_SCENARIO=normal python main.py\")"
     ]
   }
 }

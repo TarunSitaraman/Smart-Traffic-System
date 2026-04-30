@@ -39,6 +39,7 @@
 ultralytics>=8.0.0          # YOLOv8 (pulls in torch on non-Jetson; skip on Jetson)
 opencv-python-headless>=4.7 # Use system OpenCV on Jetson (see note above)
 numpy>=1.21,<2.0
+scipy>=1.7                  # For scientific computing (used in metrics)
 
 # Web API & dashboard
 flask>=3.0
