@@ -6,11 +6,12 @@
 # =============================================================================
 
 import logging
+import time
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
-import time
+
 import numpy as np
-from collections import defaultdict
 
 logger = logging.getLogger("tracker")
 
@@ -18,6 +19,7 @@ logger = logging.getLogger("tracker")
 @dataclass
 class Track:
     """Represents a tracked vehicle across multiple frames."""
+
     track_id: int
     class_name: str
     x1: float
@@ -72,7 +74,7 @@ class VehicleTracker:
         self.frame_count += 1
         current_time = time.time()
 
-        # Predict new track positions
+        # Predict new track positions and increment age
         for track in self.tracks.values():
             track.cx += track.vx
             track.cy += track.vy
@@ -100,6 +102,7 @@ class VehicleTracker:
             track.y2 = det["y2"]
             track.confidence = det["confidence"]
             track.hits += 1
+            track.age = 0  # RESET AGE ON MATCH
             track.last_seen = current_time
 
             det["track_id"] = track_id
@@ -208,7 +211,11 @@ class VehicleTracker:
                     unmatched_dets.discard(i)
                     unmatched_tracks.discard(best_j)
 
-        return matched_pairs, list(unmatched_dets), [track_ids[j] for j in unmatched_tracks]
+        return (
+            matched_pairs,
+            list(unmatched_dets),
+            [track_ids[j] for j in unmatched_tracks],
+        )
 
     @staticmethod
     def _iou(box1: np.ndarray, box2: np.ndarray) -> float:

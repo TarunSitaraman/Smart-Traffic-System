@@ -48,6 +48,8 @@ Thumbs.db
 
 # Database
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 
@@ -62,19 +64,21 @@ edge_ai.log
 *.tflite
 *.pb
 
-# Video files (can be large)
+# Video and Audio files (can be large)
 *.mp4
 *.avi
 *.mov
 *.mkv
 *.webm
 *.m4v
+*.m4a
 
 # Temporary files
 .tmp/
 .temp/
 *.tmp
 *.bak
+.claude/
 
 # macOS
 .DS_Store

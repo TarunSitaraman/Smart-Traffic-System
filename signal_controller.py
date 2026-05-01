@@ -12,6 +12,7 @@
 # =============================================================================
 
 import math
+import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
@@ -20,30 +21,30 @@ from typing import Dict, List, Optional
 # ---------------------------------------------------------------------------
 
 PCU_WEIGHTS: Dict[str, float] = {
-    "car":        1.0,
-    "van":        1.5,
-    "truck":      2.5,
-    "bus":        2.5,
+    "car": 1.0,
+    "van": 1.5,
+    "truck": 2.5,
+    "bus": 2.5,
     "motorcycle": 0.5,
-    "bicycle":    0.3,
-    "person":     0.2,
+    "bicycle": 0.3,
+    "person": 0.2,
 }
 
 # ---------------------------------------------------------------------------
 # Timing constants (all in seconds)
 # ---------------------------------------------------------------------------
 
-SATURATION_FLOW   = 20.0   # max PCU/s that can pass in ideal conditions
-LOST_TIME_PER_PHASE = 4    # startup delay + clearance lost time per phase
-YELLOW            = 3      # yellow/amber interval
-ALL_RED           = 1      # all-red clearance between phases
-MIN_GREEN         = 10     # absolute minimum green
-MAX_GREEN         = 90     # absolute maximum green
-MIN_CYCLE         = 40     # minimum cycle length
-MAX_CYCLE         = 180    # maximum cycle length
+SATURATION_FLOW = 20.0  # max PCU/s that can pass in ideal conditions
+LOST_TIME_PER_PHASE = 4  # startup delay + clearance lost time per phase
+YELLOW = 3  # yellow/amber interval
+ALL_RED = 1  # all-red clearance between phases
+MIN_GREEN = 10  # absolute minimum green
+MAX_GREEN = 90  # absolute maximum green
+MIN_CYCLE = 40  # minimum cycle length
+MAX_CYCLE = 180  # maximum cycle length
 
 # Congestion thresholds (PCU)
-LEVEL_HIGH_THRESH   = 10.0
+LEVEL_HIGH_THRESH = 10.0
 LEVEL_MEDIUM_THRESH = 4.0
 
 
@@ -51,36 +52,38 @@ LEVEL_MEDIUM_THRESH = 4.0
 # Result dataclasses
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class DirectionTiming:
-    direction:       str           # 'north', 'south', 'east', 'west'
-    pcu:             float         # effective PCU count
-    flow_ratio:      float         # y_i = pcu / saturation_flow
-    green:           int           # suggested green seconds
-    yellow:          int = YELLOW
-    all_red:         int = ALL_RED
-    density_level:   str = "LOW"   # LOW / MEDIUM / HIGH
-    vehicle_count:   int = 0       # raw vehicle detections used
-    state:           str = "RED"   # RED / GREEN / YELLOW
-    breakdown:       Dict[str, float] = field(default_factory=dict)
+    direction: str  # 'north', 'south', 'east', 'west'
+    pcu: float  # effective PCU count
+    flow_ratio: float  # y_i = pcu / saturation_flow
+    green: int  # suggested green seconds
+    yellow: int = YELLOW
+    all_red: int = ALL_RED
+    density_level: str = "LOW"  # LOW / MEDIUM / HIGH
+    vehicle_count: int = 0  # raw vehicle detections used
+    state: str = "RED"  # RED / GREEN / YELLOW
+    breakdown: Dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
 class CycleResult:
-    north:           DirectionTiming
-    south:           DirectionTiming
-    east:            DirectionTiming
-    west:            DirectionTiming
-    cycle_length:    int
-    lost_time:       int
-    total_pcu:       float
-    y_total:         float
-    formula_note:    str
+    north: DirectionTiming
+    south: DirectionTiming
+    east: DirectionTiming
+    west: DirectionTiming
+    cycle_length: int
+    lost_time: int
+    total_pcu: float
+    y_total: float
+    formula_note: str
 
 
 # ---------------------------------------------------------------------------
 # Controller
 # ---------------------------------------------------------------------------
+
 
 class TrafficSignalController:
     """Computes adaptive 4-direction signal timings using Webster's method."""
@@ -96,8 +99,12 @@ class TrafficSignalController:
         Returns:
             CycleResult with timings for all 4 directions
         """
-        pcu_ns = lane_data.get("north", {}).get("pcu", 0.0) + lane_data.get("south", {}).get("pcu", 0.0)
-        pcu_ew = lane_data.get("east", {}).get("pcu", 0.0) + lane_data.get("west", {}).get("pcu", 0.0)
+        pcu_ns = lane_data.get("north", {}).get("pcu", 0.0) + lane_data.get(
+            "south", {}
+        ).get("pcu", 0.0)
+        pcu_ew = lane_data.get("east", {}).get("pcu", 0.0) + lane_data.get(
+            "west", {}
+        ).get("pcu", 0.0)
         total_pcu = pcu_ns + pcu_ew
 
         if total_pcu < 0.1:
@@ -171,8 +178,8 @@ class TrafficSignalController:
         )
 
         note = (
-            f"Webster C_opt = (1.5×{L}+5)/(1−{round(Y,3)}) = {C_opt}s  |  "
-            f"N/S {g_ns}s ({round(y_ns/Y*100,1)}%)  E/W {g_ew}s ({round(y_ew/Y*100,1)}%)"
+            f"Webster C_opt = (1.5×{L}+5)/(1−{round(Y, 3)}) = {C_opt}s  |  "
+            f"N/S {g_ns}s ({round(y_ns / Y * 100, 1)}%)  E/W {g_ew}s ({round(y_ew / Y * 100, 1)}%)"
         )
 
         return CycleResult(
@@ -201,9 +208,142 @@ class TrafficSignalController:
         )
 
 
+class PhaseManager:
+    """Manages the active signal phase and state transitions."""
+
+    def __init__(self):
+        self.current_phase = "NS"  # "NS" or "EW"
+        self.current_state = "GREEN"  # "GREEN", "YELLOW", "RED" (all-red)
+        self.phase_start_time = time.time()
+        self.last_cycle_result: Optional[CycleResult] = None
+
+    def update(self, cycle_result: CycleResult) -> Dict[str, str]:
+        """Update and return the current state for all 4 lanes."""
+        self.last_cycle_result = cycle_result
+        now = time.time()
+        elapsed = now - self.phase_start_time
+
+        # Get durations for current cycle
+        g_ns = cycle_result.north.green
+        g_ew = cycle_result.east.green
+
+        # Phase sequence for one axis: GREEN -> YELLOW -> ALL_RED
+        if self.current_phase == "NS":
+            if elapsed < g_ns:
+                self.current_state = "GREEN"
+            elif elapsed < g_ns + YELLOW:
+                self.current_state = "YELLOW"
+            elif elapsed < g_ns + YELLOW + ALL_RED:
+                self.current_state = "RED"
+            else:
+                # Switch to EW
+                self.current_phase = "EW"
+                self.phase_start_time = now
+                self.current_state = "GREEN"
+        else:  # EW
+            if elapsed < g_ew:
+                self.current_state = "GREEN"
+            elif elapsed < g_ew + YELLOW:
+                self.current_state = "YELLOW"
+            elif elapsed < g_ew + YELLOW + ALL_RED:
+                self.current_state = "RED"
+            else:
+                # Switch back to NS
+                self.current_phase = "NS"
+                self.phase_start_time = now
+                self.current_state = "GREEN"
+
+        # Build final state map
+        states = {"north": "RED", "south": "RED", "east": "RED", "west": "RED"}
+        if self.current_phase == "NS":
+            states["north"] = self.current_state
+            states["south"] = self.current_state
+        else:
+            states["east"] = self.current_state
+            states["west"] = self.current_state
+
+        return states
+
+    @property
+    def remaining_seconds(self) -> int:
+        if not self.last_cycle_result:
+            return 0
+        now = time.time()
+        elapsed = now - self.phase_start_time
+
+        if self.current_phase == "NS":
+            total = self.last_cycle_result.north.green + YELLOW + ALL_RED
+        else:
+            total = self.last_cycle_result.east.green + YELLOW + ALL_RED
+
+        return max(0, int(total - elapsed))
+
+    def get_timers(self) -> Dict[str, int]:
+        """Return the countdown timer (seconds) for each lane."""
+        if not self.last_cycle_result:
+            return {"north": 0, "south": 0, "east": 0, "west": 0}
+
+        now = time.time()
+        elapsed = now - self.phase_start_time
+        g_ns = self.last_cycle_result.north.green
+        g_ew = self.last_cycle_result.east.green
+
+        timers = {}
+        if self.current_phase == "NS":
+            # NS is active: count down to next transition (Yellow or Red)
+            if elapsed < g_ns:
+                ns_t = int(g_ns - elapsed)
+            elif elapsed < g_ns + YELLOW:
+                ns_t = int(g_ns + YELLOW - elapsed)
+            else:
+                # All-Red: count down to Green (after EW phase)
+                ns_t = int(
+                    (g_ns + YELLOW + ALL_RED - elapsed) + g_ew + YELLOW + ALL_RED
+                )
+
+            timers["north"] = timers["south"] = max(0, ns_t)
+            # EW is waiting for NS phase to end
+            timers["east"] = timers["west"] = max(
+                0, int(g_ns + YELLOW + ALL_RED - elapsed)
+            )
+        else:
+            # EW is active
+            if elapsed < g_ew:
+                ew_t = int(g_ew - elapsed)
+            elif elapsed < g_ew + YELLOW:
+                ew_t = int(g_ew + YELLOW - elapsed)
+            else:
+                # All-Red: count down to Green (after NS phase)
+                ew_t = int(
+                    (g_ew + YELLOW + ALL_RED - elapsed) + g_ns + YELLOW + ALL_RED
+                )
+
+            timers["east"] = timers["west"] = max(0, ew_t)
+            # NS is waiting for EW phase to end
+            timers["north"] = timers["south"] = max(
+                0, int(g_ew + YELLOW + ALL_RED - elapsed)
+            )
+
+        return timers
+
+    def _default_result(self) -> CycleResult:
+        return CycleResult(
+            north=DirectionTiming("north", 0.0, 0.0, 30, density_level="LOW"),
+            south=DirectionTiming("south", 0.0, 0.0, 30, density_level="LOW"),
+            east=DirectionTiming("east", 0.0, 0.0, 30, density_level="LOW"),
+            west=DirectionTiming("west", 0.0, 0.0, 30, density_level="LOW"),
+            cycle_length=66,
+            lost_time=8,
+            total_pcu=0.0,
+            y_total=0.0,
+            formula_note="No vehicles detected — using default 30s N/S, 30s E/W.",
+        )
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _density_level(pcu: float) -> str:
     if pcu >= LEVEL_HIGH_THRESH:

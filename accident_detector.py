@@ -6,10 +6,11 @@
 # =============================================================================
 
 import logging
+import time
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
-from collections import defaultdict, deque
-import time
+
 import numpy as np
 
 logger = logging.getLogger("accident_detector")
@@ -18,6 +19,7 @@ logger = logging.getLogger("accident_detector")
 @dataclass
 class AccidentEvent:
     """Represents a detected traffic incident."""
+
     event_id: int
     timestamp: float
     lane: str
@@ -54,7 +56,9 @@ class AccidentDetector:
         self.sudden_stop_threshold = sudden_stop_threshold
 
         # Rolling window of track states
-        self.track_history: Dict[int, deque] = defaultdict(lambda: deque(maxlen=int(window_sec * 30)))
+        self.track_history: Dict[int, deque] = defaultdict(
+            lambda: deque(maxlen=int(window_sec * 30))
+        )
         self.next_event_id = 1
         self.last_alert = {}  # track_id -> timestamp of last alert
 
@@ -125,7 +129,12 @@ class AccidentDetector:
                     )
                     self.next_event_id += 1
                     accidents.append(accident)
-                    logger.warning("Collision detected: tracks %d and %d (score=%.2f)", tid1, tid2, collision_score)
+                    logger.warning(
+                        "Collision detected: tracks %d and %d (score=%.2f)",
+                        tid1,
+                        tid2,
+                        collision_score,
+                    )
 
         # Check for sudden stops and stationary vehicles
         for det in detections:
@@ -144,9 +153,13 @@ class AccidentDetector:
             # Combine scores (suppress some signals when RED light)
             if signal == "RED":
                 # Down-weight stationary and sudden-stop at red lights
-                combined_score = 0.3 * sudden_stop + 0.2 * stationary + 0.7 * motion_anomaly
+                combined_score = (
+                    0.3 * sudden_stop + 0.2 * stationary + 0.7 * motion_anomaly
+                )
             else:
-                combined_score = 0.3 * sudden_stop + 0.4 * stationary + 0.3 * motion_anomaly
+                combined_score = (
+                    0.3 * sudden_stop + 0.4 * stationary + 0.3 * motion_anomaly
+                )
 
             # Cooldown: don't re-alert the same track within 10 seconds
             if track_id in self.last_alert and now - self.last_alert[track_id] < 10.0:
@@ -159,7 +172,9 @@ class AccidentDetector:
                     lane=lane,
                     primary_track_id=track_id,
                     secondary_track_id=None,
-                    accident_type=self._determine_type(sudden_stop, stationary, motion_anomaly),
+                    accident_type=self._determine_type(
+                        sudden_stop, stationary, motion_anomaly
+                    ),
                     confidence=combined_score,
                     score_breakdown={
                         "sudden_stop": sudden_stop,
@@ -170,7 +185,12 @@ class AccidentDetector:
                 self.next_event_id += 1
                 self.last_alert[track_id] = now
                 accidents.append(accident)
-                logger.warning("Accident detected: track %d (type=%s, score=%.2f)", track_id, accident.accident_type, combined_score)
+                logger.warning(
+                    "Accident detected: track %d (type=%s, score=%.2f)",
+                    track_id,
+                    accident.accident_type,
+                    combined_score,
+                )
 
         # Cleanup old history
         self._cleanup_old_tracks(now)
@@ -179,8 +199,18 @@ class AccidentDetector:
 
     def _collision_score(self, det1: Dict, det2: Dict) -> float:
         """Compute collision likelihood based on bounding box overlap."""
-        box1 = (det1.get("x1", 0), det1.get("y1", 0), det1.get("x2", 1), det1.get("y2", 1))
-        box2 = (det2.get("x1", 0), det2.get("y1", 0), det2.get("x2", 1), det2.get("y2", 1))
+        box1 = (
+            det1.get("x1", 0),
+            det1.get("y1", 0),
+            det1.get("x2", 1),
+            det1.get("y2", 1),
+        )
+        box2 = (
+            det2.get("x1", 0),
+            det2.get("y1", 0),
+            det2.get("x2", 1),
+            det2.get("y2", 1),
+        )
 
         iou = self._iou(box1, box2)
 
@@ -189,7 +219,11 @@ class AccidentDetector:
             v1_sq = det1.get("vx", 0) ** 2 + det1.get("vy", 0) ** 2
             v2_sq = det2.get("vx", 0) ** 2 + det2.get("vy", 0) ** 2
             combined_speed = np.sqrt(v1_sq + v2_sq)
-            return min(1.0, 0.5 * iou / self.collision_iou_threshold + 0.5 * min(combined_speed / 2.0, 1.0))
+            return min(
+                1.0,
+                0.5 * iou / self.collision_iou_threshold
+                + 0.5 * min(combined_speed / 2.0, 1.0),
+            )
 
         return 0.0
 
@@ -240,7 +274,11 @@ class AccidentDetector:
 
         # Only penalize if truly stationary for the full window
         if stationary_ratio > 0.9:
-            return 1.0 if list(history)[0]["timestamp"] < time.time() - self.stationary_sec else 0.0
+            return (
+                1.0
+                if list(history)[0]["timestamp"] < time.time() - self.stationary_sec
+                else 0.0
+            )
 
         return 0.0
 
@@ -258,7 +296,7 @@ class AccidentDetector:
         headings = []
         for state in states:
             vx, vy = state["vx"], state["vy"]
-            if np.sqrt(vx ** 2 + vy ** 2) > 0.1:
+            if np.sqrt(vx**2 + vy**2) > 0.1:
                 heading = np.arctan2(vy, vx)
                 headings.append(heading)
 
@@ -278,7 +316,9 @@ class AccidentDetector:
         anomaly_ratio = sharp_turns / max(1, len(headings) - 1)
         return min(1.0, anomaly_ratio)
 
-    def _determine_type(self, sudden_stop: float, stationary: float, motion_anomaly: float) -> str:
+    def _determine_type(
+        self, sudden_stop: float, stationary: float, motion_anomaly: float
+    ) -> str:
         """Determine accident type based on score breakdown."""
         if motion_anomaly > 0.7:
             return "abnormal_motion"
@@ -311,11 +351,19 @@ class AccidentDetector:
         return inter_area / union_area if union_area > 0 else 0.0
 
     def _cleanup_old_tracks(self, now: float):
-        """Remove tracks older than the window."""
+        """Remove tracks older than the window or that haven't been seen."""
         cutoff = now - self.window_sec
+        active_ids = set()
+
         for track_id in list(self.track_history.keys()):
             history = self.track_history[track_id]
+
+            # Remove old entries from this track's history
             while history and history[0]["timestamp"] < cutoff:
                 history.popleft()
-            if not history:
+
+            # If no history left OR the track hasn't been updated in 2 seconds, remove the track entirely
+            if not history or (now - history[-1]["timestamp"] > 2.0):
                 del self.track_history[track_id]
+                if track_id in self.last_alert:
+                    del self.last_alert[track_id]

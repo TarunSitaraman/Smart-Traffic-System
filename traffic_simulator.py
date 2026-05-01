@@ -6,13 +6,14 @@
 # =============================================================================
 
 import logging
-from dataclasses import dataclass
-from typing import List, Dict, Tuple, Optional
-import numpy as np
-import cv2
 import random
-from collections import deque
 import time
+from collections import deque
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
+
+import cv2
+import numpy as np
 
 logger = logging.getLogger("simulator")
 
@@ -20,6 +21,7 @@ logger = logging.getLogger("simulator")
 @dataclass
 class SimulatedVehicle:
     """Represents a vehicle in the simulation."""
+
     vehicle_id: int
     class_name: str  # 'car', 'truck', 'motorcycle', 'bicycle'
     x: float  # position x (0-1280)
@@ -45,20 +47,50 @@ class TrafficSimulator:
 
     VEHICLE_CLASSES = ["car", "truck", "motorcycle"]
     VEHICLE_SIZES = {
-        "car": (40, 25),
-        "truck": (60, 30),
-        "motorcycle": (25, 15),
+        "car": (26, 48),
+        "truck": (32, 80),
+        "motorcycle": (18, 32),
     }
 
     # Lane configurations: spawn and goal positions
     LANE_CONFIG = {
-        "north": {"start": (640, -30), "stop_y": 340, "goal": (640, 720), "axis": "y", "direction": 1},
-        "south": {"start": (640, 750), "stop_y": 380, "goal": (640, -30), "axis": "y", "direction": -1},
-        "east": {"start": (1310, 360), "stop_x": 940, "goal": (-30, 360), "axis": "x", "direction": -1},
-        "west": {"start": (-30, 360), "stop_x": 340, "goal": (1310, 360), "axis": "x", "direction": 1},
+        "north": {
+            "start": (540, -30),
+            "stop_y": 260,
+            "goal": (540, 750),
+            "axis": "y",
+            "direction": 1,
+        },
+        "south": {
+            "start": (740, 750),
+            "stop_y": 460,
+            "goal": (740, -30),
+            "axis": "y",
+            "direction": -1,
+        },
+        "east": {
+            "start": (1310, 400),
+            "stop_x": 860,
+            "goal": (-30, 400),
+            "axis": "x",
+            "direction": -1,
+        },
+        "west": {
+            "start": (-30, 320),
+            "stop_x": 420,
+            "goal": (1310, 320),
+            "axis": "x",
+            "direction": 1,
+        },
     }
 
-    def __init__(self, width: int = 1280, height: int = 720, fps: int = 30, scenario: str = "normal"):
+    def __init__(
+        self,
+        width: int = 1280,
+        height: int = 720,
+        fps: int = 30,
+        scenario: str = "normal",
+    ):
         """
         Args:
             width: Canvas width
@@ -87,7 +119,9 @@ class TrafficSimulator:
         self.stalled_vehicle_id = None
         self.emergency_vehicle_spawned = False
 
-    def next_frame(self, signal_state: Optional[Dict[str, str]] = None) -> Tuple[np.ndarray, List[Dict]]:
+    def next_frame(
+        self, signal_state: Optional[Dict[str, str]] = None
+    ) -> Tuple[np.ndarray, List[Dict]]:
         """
         Generate the next frame of simulation.
 
@@ -104,7 +138,9 @@ class TrafficSimulator:
             self.signal_state = signal_state
 
         # Create canvas
-        canvas = np.ones((self.height, self.width, 3), dtype=np.uint8) * 240  # light gray background
+        canvas = (
+            np.ones((self.height, self.width, 3), dtype=np.uint8) * 240
+        )  # light gray background
 
         # Draw intersection
         self._draw_intersection(canvas)
@@ -141,41 +177,125 @@ class TrafficSimulator:
         return canvas, detections
 
     def _draw_intersection(self, canvas: np.ndarray):
-        """Draw the intersection structure (roads, lanes, markings)."""
-        # Horizontal road
-        cv2.rectangle(canvas, (0, 300), (self.width, 420), (200, 200, 200), -1)
+        """Draw a more realistic intersection structure."""
+        # Road colors
+        road_color = (60, 60, 60)
+        marking_color = (200, 200, 200)
+        yellow_marking = (0, 200, 220)
 
-        # Vertical road
-        cv2.rectangle(canvas, (460, 0), (820, self.height), (200, 200, 200), -1)
+        # Draw main roads
+        # Horizontal
+        cv2.rectangle(canvas, (0, 280), (self.width, 440), road_color, -1)
+        # Vertical
+        cv2.rectangle(canvas, (440, 0), (840, self.height), road_color, -1)
 
-        # Lane markings (dashed white lines)
-        for y in [330, 390]:
-            for x in range(0, self.width, 40):
-                cv2.line(canvas, (x, y), (x + 20, y), (255, 255, 255), 2)
+        # Draw curbs/sidewalks
+        sidewalk_color = (180, 180, 180)
+        # Top-left
+        cv2.rectangle(canvas, (0, 0), (440, 280), sidewalk_color, -1)
+        # Top-right
+        cv2.rectangle(canvas, (840, 0), (self.width, 280), sidewalk_color, -1)
+        # Bottom-left
+        cv2.rectangle(canvas, (0, 440), (440, self.height), sidewalk_color, -1)
+        # Bottom-right
+        cv2.rectangle(canvas, (840, 440), (self.width, self.height), sidewalk_color, -1)
 
-        for x in [540, 740]:
-            for y in range(0, self.height, 40):
-                cv2.line(canvas, (x, y), (x, y + 20), (255, 255, 255), 2)
+        # Lane markings (dashed white)
+        # Horizontal middle
+        for x in range(0, self.width, 40):
+            cv2.line(canvas, (x, 360), (x + 20, 360), marking_color, 2)
+        # Vertical middle
+        for y in range(0, self.height, 40):
+            cv2.line(canvas, (640, y), (640, y + 20), marking_color, 2)
 
-        # Stop lines (solid yellow)
-        cv2.line(canvas, (460, 340), (820, 340), (0, 255, 255), 3)  # north stop
-        cv2.line(canvas, (460, 380), (820, 380), (0, 255, 255), 3)  # south stop
-        cv2.line(canvas, (540, 0), (540, 720), (0, 255, 255), 3)   # west stop
-        cv2.line(canvas, (740, 0), (740, 720), (0, 255, 255), 3)   # east stop
+        # Lane separators (solid yellow)
+        # North/South lanes
+        cv2.line(canvas, (540, 0), (540, 280), yellow_marking, 2)
+        cv2.line(canvas, (740, 0), (740, 280), yellow_marking, 2)
+        cv2.line(canvas, (540, 440), (540, self.height), yellow_marking, 2)
+        cv2.line(canvas, (740, 440), (740, self.height), yellow_marking, 2)
+
+        # East/West lanes
+        cv2.line(canvas, (0, 320), (440, 320), yellow_marking, 2)
+        cv2.line(canvas, (0, 400), (440, 400), yellow_marking, 2)
+        cv2.line(canvas, (840, 320), (self.width, 320), yellow_marking, 2)
+        cv2.line(canvas, (840, 400), (self.width, 400), yellow_marking, 2)
+
+        # Stop lines (thick solid white)
+        # North
+        cv2.rectangle(canvas, (440, 275), (840, 280), (255, 255, 255), -1)
+        # South
+        cv2.rectangle(canvas, (440, 440), (840, 445), (255, 255, 255), -1)
+        # West
+        cv2.rectangle(canvas, (435, 280), (440, 440), (255, 255, 255), -1)
+        # East
+        cv2.rectangle(canvas, (840, 280), (845, 440), (255, 255, 255), -1)
+
+        # Crosswalks
+        for i in range(450, 830, 30):
+            # Top crosswalk
+            cv2.rectangle(canvas, (i, 240), (i + 15, 270), (240, 240, 240), -1)
+            # Bottom crosswalk
+            cv2.rectangle(canvas, (i, 450), (i + 15, 480), (240, 240, 240), -1)
+
+        for i in range(290, 430, 30):
+            # Left crosswalk
+            cv2.rectangle(canvas, (400, i), (430, i + 15), (240, 240, 240), -1)
+            # Right crosswalk
+            cv2.rectangle(canvas, (850, i), (880, i + 15), (240, 240, 240), -1)
 
     def _draw_signals(self, canvas: np.ndarray):
-        """Draw traffic signal lights."""
-        signal_positions = {
-            "north": (420, 280),
-            "south": (420, 500),
-            "west": (380, 320),
-            "east": (900, 320),
-        }
+        """Draw realistic traffic signal assemblies with labels."""
+        # North signal (Incoming from top)
+        self._draw_signal_box(
+            canvas, (590, 160), self.signal_state.get("north", "RED"), "NORTH"
+        )
+        # South signal (Incoming from bottom)
+        self._draw_signal_box(
+            canvas, (650, 480), self.signal_state.get("south", "RED"), "SOUTH"
+        )
+        # West signal (Incoming from left)
+        self._draw_signal_box(
+            canvas, (330, 200), self.signal_state.get("west", "RED"), "WEST"
+        )
+        # East signal (Incoming from right)
+        self._draw_signal_box(
+            canvas, (910, 430), self.signal_state.get("east", "RED"), "EAST"
+        )
 
-        for lane, pos in signal_positions.items():
-            color = self._state_to_color(self.signal_state.get(lane, "RED"))
-            cv2.circle(canvas, pos, 15, color, -1)
-            cv2.circle(canvas, pos, 15, (0, 0, 0), 2)
+    def _draw_signal_box(
+        self, canvas: np.ndarray, top_left: Tuple[int, int], state: str, label: str = ""
+    ):
+        """Draw a 3-light traffic signal box with a label."""
+        x, y = top_left
+        w, h = 34, 86
+
+        # Box
+        cv2.rectangle(canvas, (x, y), (x + w, y + h), (20, 20, 20), -1)
+        cv2.rectangle(canvas, (x, y), (x + w, y + h), (100, 100, 100), 1)
+
+        # Label
+        if label:
+            cv2.putText(
+                canvas,
+                label,
+                (x, y - 8),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.4,
+                (200, 200, 200),
+                1,
+            )
+
+        # Lights
+        # Red
+        r_color = (0, 0, 255) if state == "RED" else (0, 0, 80)
+        cv2.circle(canvas, (x + w // 2, y + 16), 10, r_color, -1)
+        # Yellow
+        y_color = (0, 220, 255) if state == "YELLOW" else (0, 80, 100)
+        cv2.circle(canvas, (x + w // 2, y + 43), 10, y_color, -1)
+        # Green
+        g_color = (0, 255, 0) if state == "GREEN" else (0, 80, 0)
+        cv2.circle(canvas, (x + w // 2, y + 70), 10, g_color, -1)
 
     def _state_to_color(self, state: str) -> Tuple[int, int, int]:
         """Convert signal state to BGR color."""
@@ -187,29 +307,24 @@ class TrafficSimulator:
             return (0, 0, 255)
 
     def _spawn_vehicles(self):
-        """Spawn new vehicles based on arrival rates."""
-        now = time.time()
-
-        # Define arrival rates per scenario (vehicles per second)
-        rates = {
-            "normal": {"north": 0.5, "south": 0.4, "east": 0.3, "west": 0.2},
-            "congestion": {"north": 2.0, "south": 1.8, "east": 1.5, "west": 1.2},
-            "collision": {"north": 0.5, "south": 0.5, "east": 0.5, "west": 0.5},
-            "stalled": {"north": 0.5, "south": 0.4, "east": 0.3, "west": 0.2},
-            "emergency": {"north": 0.5, "south": 0.5, "east": 0.5, "west": 0.5},
+        """Spawn new vehicles based on frame intervals to maintain stability."""
+        # Increased spawn rates (smaller intervals)
+        intervals = {
+            "normal": {"north": 45, "south": 55, "east": 70, "west": 100},
+            "congestion": {"north": 12, "south": 15, "east": 18, "west": 22},
+            "collision": {"north": 60, "south": 60, "east": 60, "west": 60},
+            "stalled": {"north": 45, "south": 55, "east": 70, "west": 100},
+            "emergency": {"north": 60, "south": 60, "east": 60, "west": 60},
         }
 
-        target_rates = rates.get(self.scenario, rates["normal"])
+        target_intervals = intervals.get(self.scenario, intervals["normal"])
 
-        for lane, rate in target_rates.items():
-            last_spawn = self.last_spawn_time.get(lane, 0)
-            spawn_interval = 1.0 / rate
-            if now - last_spawn > spawn_interval:
+        for lane, interval in target_intervals.items():
+            if self.frame_count % interval == 0:
                 self._spawn_vehicle_in_lane(lane)
-                self.last_spawn_time[lane] = now
 
     def _spawn_vehicle_in_lane(self, lane: str):
-        """Spawn a single vehicle in a lane."""
+        """Spawn a single vehicle in a lane with increased speed."""
         cls = random.choice(self.VEHICLE_CLASSES)
         width, height = self.VEHICLE_SIZES[cls]
         config = self.LANE_CONFIG[lane]
@@ -222,104 +337,199 @@ class TrafficSimulator:
             width=width,
             height=height,
             lane=lane,
-            velocity=2.0 + random.uniform(-0.5, 0.5),  # 2 px/frame ≈ 20 km/h
+            velocity=4.0 + random.uniform(-1.0, 1.0),  # Increased base speed (4px/f)
             spawn_time=time.time(),
         )
         self.vehicles[self.next_vehicle_id] = vehicle
         self.next_vehicle_id += 1
 
     def _update_vehicles(self):
-        """Update vehicle positions, respecting signals and stop lines."""
-        for v_id, vehicle in list(self.vehicles.items()):
-            config = self.LANE_CONFIG[vehicle.lane]
-            axis = config["axis"]
+        """Update vehicle positions with faster acceleration/deceleration."""
+        # Sort vehicles in each lane by distance to process them from front to back
+        lane_queues = {lane: [] for lane in self.LANE_CONFIG.keys()}
+        for v in self.vehicles.values():
+            lane_queues[v.lane].append(v)
+
+        for lane, lane_vehicles in lane_queues.items():
+            config = self.LANE_CONFIG[lane]
             direction = config["direction"]
-            stop_pos = config["stop_x"] if axis == "x" else config["stop_y"]
+            axis = config["axis"]
 
-            # Check if approaching stop line
-            if axis == "x":
-                approaching_stop = (
-                    (direction > 0 and vehicle.x > stop_pos - 50 and vehicle.x < stop_pos) or
-                    (direction < 0 and vehicle.x < stop_pos + 50 and vehicle.x > stop_pos)
-                )
-                at_stop = abs(vehicle.x - stop_pos) < 10
+            # Sort: front-most vehicle first
+            if axis == "y":
+                lane_vehicles.sort(key=lambda v: v.y * direction, reverse=True)
             else:
-                approaching_stop = (
-                    (direction > 0 and vehicle.y > stop_pos - 50 and vehicle.y < stop_pos) or
-                    (direction < 0 and vehicle.y < stop_pos + 50 and vehicle.y > stop_pos)
-                )
-                at_stop = abs(vehicle.y - stop_pos) < 10
+                lane_vehicles.sort(key=lambda v: v.x * direction, reverse=True)
 
-            # Respect signal
-            signal = self.signal_state.get(vehicle.lane, "RED")
-            if signal == "RED" and at_stop:
-                vehicle.stopped = True
-                vehicle.velocity = 0.0
-            elif signal == "GREEN" and vehicle.stopped:
-                vehicle.stopped = False
-                vehicle.velocity = 2.0 + random.uniform(-0.5, 0.5)
-            elif signal == "YELLOW":
-                vehicle.velocity = max(0.5, vehicle.velocity * 0.8)
+            for i, vehicle in enumerate(lane_vehicles):
+                stop_pos = config["stop_x"] if axis == "x" else config["stop_y"]
 
-            # Update position
-            if not vehicle.stopped:
+                # 1. Check distance to stop line if signal is RED or YELLOW
+                signal = self.signal_state.get(lane, "RED")
+                at_stop = False
                 if axis == "x":
-                    vehicle.x += vehicle.velocity * direction
+                    dist_to_stop = (stop_pos - vehicle.x) * direction
                 else:
-                    vehicle.y += vehicle.velocity * direction
+                    dist_to_stop = (stop_pos - vehicle.y) * direction
+
+                # Stop if Red or if Yellow and far enough from stop line to stop safely
+                if signal == "RED" and 0 < dist_to_stop < 25:
+                    at_stop = True
+                elif signal == "YELLOW" and 30 < dist_to_stop < 60:
+                    at_stop = True
+
+                # 2. Check distance to vehicle in front
+                vehicle_ahead = lane_vehicles[i - 1] if i > 0 else None
+                blocked_by_vehicle = False
+                if vehicle_ahead:
+                    if axis == "x":
+                        dist = (vehicle_ahead.x - vehicle.x) * direction
+                    else:
+                        dist = (vehicle_ahead.y - vehicle.y) * direction
+
+                    safe_dist = vehicle_ahead.height + 20
+                    if 0 < dist < safe_dist:
+                        blocked_by_vehicle = True
+
+                # 3. Decision logic
+                if (signal == "RED" and at_stop) or blocked_by_vehicle:
+                    vehicle.stopped = True
+                    vehicle.velocity = max(0, vehicle.velocity - 0.5)  # Fast braking
+                elif signal == "GREEN" or not at_stop:
+                    if not blocked_by_vehicle:
+                        vehicle.stopped = False
+                        # Gradual acceleration
+                        target_vel = 4.0 + random.uniform(-0.5, 0.5)
+                        vehicle.velocity = min(target_vel, vehicle.velocity + 0.3)
+
+                if signal == "YELLOW" and not blocked_by_vehicle and not at_stop:
+                    vehicle.velocity = max(1.5, vehicle.velocity * 0.95)
+
+                # Update position
+                if vehicle.velocity > 0:
+                    if axis == "x":
+                        vehicle.x += vehicle.velocity * direction
+                    else:
+                        vehicle.y += vehicle.velocity * direction
 
     def _draw_vehicles(self, canvas: np.ndarray) -> List[Dict]:
-        """Draw vehicles on canvas and return detections."""
+        """Draw vehicles with more detail and return detections."""
         detections = []
 
         for v_id, vehicle in self.vehicles.items():
-            x1 = int(vehicle.x - vehicle.width / 2)
-            y1 = int(vehicle.y - vehicle.height / 2)
-            x2 = int(vehicle.x + vehicle.width / 2)
-            y2 = int(vehicle.y + vehicle.height / 2)
+            # Calculate corners
+            if vehicle.lane in ["north", "south"]:
+                w, h = vehicle.width, vehicle.height
+            else:
+                w, h = vehicle.height, vehicle.width  # Rotate for horizontal lanes
 
-            # Clamp to canvas
-            x1 = max(0, min(x1, self.width - 1))
-            y1 = max(0, min(y1, self.height - 1))
-            x2 = max(0, min(x2, self.width - 1))
-            y2 = max(0, min(y2, self.height - 1))
+            x1 = int(vehicle.x - w / 2)
+            y1 = int(vehicle.y - h / 2)
+            x2 = int(vehicle.x + w / 2)
+            y2 = int(vehicle.y + h / 2)
 
             # Color by class
-            color = {"car": (0, 0, 200), "truck": (0, 100, 200), "motorcycle": (200, 100, 0)}
-            color = color.get(vehicle.class_name, (128, 128, 128))
+            base_colors = {
+                "car": (180, 100, 40),  # Blueish
+                "truck": (40, 100, 180),  # Oranges
+                "motorcycle": (150, 50, 150),  # Purple
+                "emergency": (255, 255, 255),  # White
+            }
+            color = base_colors.get(vehicle.class_name, (128, 128, 128))
 
-            # Draw rectangle
+            # Draw body
             cv2.rectangle(canvas, (x1, y1), (x2, y2), color, -1)
-            cv2.rectangle(canvas, (x1, y1), (x2, y2), (0, 0, 0), 1)
+            cv2.rectangle(canvas, (x1, y1), (x2, y2), (20, 20, 20), 1)
+
+            # Add "windshield" for directionality
+            ws_color = (240, 240, 240)
+            if vehicle.lane == "north":  # Moving down
+                cv2.rectangle(
+                    canvas, (x1 + 2, y1 + h - 8), (x2 - 2, y1 + h - 4), ws_color, -1
+                )
+            elif vehicle.lane == "south":  # Moving up
+                cv2.rectangle(canvas, (x1 + 2, y1 + 4), (x2 - 2, y1 + 8), ws_color, -1)
+            elif vehicle.lane == "west":  # Moving right
+                cv2.rectangle(
+                    canvas, (x1 + w - 8, y1 + 2), (x1 + w - 4, y2 - 2), ws_color, -1
+                )
+            elif vehicle.lane == "east":  # Moving left
+                cv2.rectangle(canvas, (x1 + 4, y1 + 2), (x1 + 8, y2 - 2), ws_color, -1)
+
+            # Special treatment for emergency vehicle (red/blue lights)
+            if vehicle.class_name == "emergency":
+                if (self.frame_count // 5) % 2 == 0:
+                    cv2.circle(canvas, (x1 + 5, y1 + 5), 3, (255, 0, 0), -1)
+                    cv2.circle(canvas, (x2 - 5, y2 - 5), 3, (0, 0, 255), -1)
+                else:
+                    cv2.circle(canvas, (x1 + 5, y1 + 5), 3, (0, 0, 255), -1)
+                    cv2.circle(canvas, (x2 - 5, y2 - 5), 3, (255, 0, 0), -1)
 
             # Add detection
             det = {
                 "class_name": vehicle.class_name,
                 "confidence": 0.98,
-                "x1": x1 / self.width,
-                "y1": y1 / self.height,
-                "x2": x2 / self.width,
-                "y2": y2 / self.height,
+                "x1": max(0, x1) / self.width,
+                "y1": max(0, y1) / self.height,
+                "x2": min(self.width, x2) / self.width,
+                "y2": min(self.height, y2) / self.height,
             }
             detections.append(det)
 
+        # Draw a small legend in the corner
+        self._draw_legend(canvas)
+
         return detections
 
+    def _draw_legend(self, canvas: np.ndarray):
+        """Draw a legend for vehicle types."""
+        overlay = canvas.copy()
+        cv2.rectangle(overlay, (10, 10), (180, 130), (30, 30, 30), -1)
+        cv2.addWeighted(overlay, 0.7, canvas, 0.3, 0, canvas)
+
+        cv2.putText(
+            canvas,
+            "Vehicle Types",
+            (20, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (255, 255, 255),
+            1,
+        )
+
+        types = [
+            ("Car", (180, 100, 40)),
+            ("Truck", (40, 100, 180)),
+            ("Motorcycle", (150, 50, 150)),
+            ("Emergency", (255, 255, 255)),
+        ]
+
+        for i, (name, color) in enumerate(types):
+            y = 55 + i * 20
+            cv2.rectangle(canvas, (20, y - 10), (40, y), color, -1)
+            cv2.putText(
+                canvas,
+                name,
+                (50, y - 2),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.4,
+                (200, 200, 200),
+                1,
+            )
+
     def _cleanup_vehicles(self):
-        """Remove vehicles that have exited the frame."""
-        margin = 100
+        """Remove vehicles that have exited the visible canvas."""
         to_remove = []
+        margin = 100
 
         for v_id, vehicle in self.vehicles.items():
-            config = self.LANE_CONFIG[vehicle.lane]
-            goal_x, goal_y = config["goal"]
-
-            if vehicle.lane in ["north", "south"]:
-                if abs(vehicle.y - goal_y) < margin:
-                    to_remove.append(v_id)
-            else:
-                if abs(vehicle.x - goal_x) < margin:
-                    to_remove.append(v_id)
+            if (
+                vehicle.x < -margin
+                or vehicle.x > self.width + margin
+                or vehicle.y < -margin
+                or vehicle.y > self.height + margin
+            ):
+                to_remove.append(v_id)
 
         for v_id in to_remove:
             del self.vehicles[v_id]
@@ -337,11 +547,11 @@ class TrafficSimulator:
             v1 = north_vehicles[0]
             v2 = east_vehicles[0]
 
-            # Force them to collide at the intersection center
-            v1.x = 640
-            v1.y = 350
-            v2.x = 640
-            v2.y = 360
+            # Force them to collide at the intersection center (640, 360)
+            v1.x = 635
+            v1.y = 355
+            v2.x = 645
+            v2.y = 365
 
             v1.stopped = True
             v2.stopped = True
@@ -355,14 +565,16 @@ class TrafficSimulator:
             stalled.stopped = True
             stalled.velocity = 0.0
             self.stalled_vehicle_id = stalled.vehicle_id
-            logger.info("Stalled vehicle: %d in lane %s", stalled.vehicle_id, stalled.lane)
+            logger.info(
+                "Stalled vehicle: %d in lane %s", stalled.vehicle_id, stalled.lane
+            )
 
     def _spawn_emergency_vehicle(self):
         """Spawn an ambulance to test emergency response."""
         vehicle = SimulatedVehicle(
             vehicle_id=self.next_vehicle_id,
             class_name="emergency",
-            x=640,
+            x=540,
             y=-30,
             width=50,
             height=30,
@@ -382,12 +594,13 @@ class TrafficSimulator:
         Otherwise, just generates frames indefinitely.
         """
         import threading
+
         from detector import DetectionResult
 
         logger.info("Traffic simulator started (scenario: %s)", self.scenario)
 
         # For use as a detector replacement, we need a stop event
-        if not hasattr(self, '_stop_evt'):
+        if not hasattr(self, "_stop_evt"):
             self._stop_evt = threading.Event()
 
         frame_id = 0
@@ -416,6 +629,6 @@ class TrafficSimulator:
 
     def stop(self) -> None:
         """Stop the simulator loop."""
-        if hasattr(self, '_stop_evt'):
+        if hasattr(self, "_stop_evt"):
             self._stop_evt.set()
         logger.info("Traffic simulator stopped")

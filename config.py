@@ -10,14 +10,10 @@ import os
 #           YouTube URL   https://www.youtube.com/watch?v=...  (needs yt-dlp)
 #           Local file    /path/to/traffic.mp4  (loops automatically)
 #           Webcam        0  (first USB camera)
-RTSP_URL = os.getenv(
-    "RTSP_URL",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                 "WhatsApp Video 2026-04-18 at 11.35.33 AM.mp4"),
-)
-CAMERA_WIDTH  = 1280
+RTSP_URL = os.getenv("RTSP_URL", "0")
+CAMERA_WIDTH = 1280
 CAMERA_HEIGHT = 720
-CAMERA_FPS    = 30
+CAMERA_FPS = 30
 
 # Loop local video files when they reach the end (set False to stop at EOF)
 VIDEO_LOOP = os.getenv("VIDEO_LOOP", "true").lower() != "false"
@@ -25,26 +21,28 @@ VIDEO_LOOP = os.getenv("VIDEO_LOOP", "true").lower() != "false"
 # --- YOLOv8 Model ---
 # Use a lightweight model for Jetson Nano: yolov8n (nano) or yolov8s (small)
 # Export to TensorRT (.engine) for maximum performance on Jetson
-MODEL_PATH       = os.getenv("MODEL_PATH", "yolov8n.pt")   # swap to yolov8n.engine after export
+MODEL_PATH = os.getenv(
+    "MODEL_PATH", "yolov8n.pt"
+)  # swap to yolov8n.engine after export
 CONFIDENCE_THRESH = float(os.getenv("CONF_THRESH", "0.45"))
-IOU_THRESH        = float(os.getenv("IOU_THRESH",  "0.50"))
-DEVICE            = os.getenv("DEVICE", "cpu")              # 'cuda' on Jetson Nano, 'cpu' for local testing
-INFERENCE_IMG_SIZE = 640                                     # YOLOv8 input resolution
+IOU_THRESH = float(os.getenv("IOU_THRESH", "0.50"))
+DEVICE = os.getenv("DEVICE", "cpu")  # 'cuda' on Jetson Nano, 'cpu' for local testing
+INFERENCE_IMG_SIZE = 640  # YOLOv8 input resolution
 
 # --- Detection Processing ---
-FRAME_SKIP = 2    # Run inference every N frames to reduce Jetson load
+FRAME_SKIP = 2  # Run inference every N frames to reduce Jetson load
 MAX_DETECTIONS_PER_FRAME = 50
 
 # --- Classes of Interest for Alerts (COCO class names) ---
 # Detections of these classes trigger NLP-generated alerts
 ALERT_CLASSES = {
-    "person":     {"min_confidence": 0.55, "severity": "HIGH"},
-    "car":        {"min_confidence": 0.50, "severity": "MEDIUM"},
-    "truck":      {"min_confidence": 0.50, "severity": "MEDIUM"},
+    "person": {"min_confidence": 0.55, "severity": "HIGH"},
+    "car": {"min_confidence": 0.50, "severity": "MEDIUM"},
+    "truck": {"min_confidence": 0.50, "severity": "MEDIUM"},
     "motorcycle": {"min_confidence": 0.50, "severity": "MEDIUM"},
-    "bicycle":    {"min_confidence": 0.45, "severity": "LOW"},
-    "fire":       {"min_confidence": 0.60, "severity": "CRITICAL"},
-    "knife":      {"min_confidence": 0.65, "severity": "CRITICAL"},
+    "bicycle": {"min_confidence": 0.45, "severity": "LOW"},
+    "fire": {"min_confidence": 0.60, "severity": "CRITICAL"},
+    "knife": {"min_confidence": 0.65, "severity": "CRITICAL"},
 }
 
 # Minimum seconds between repeated alerts for the same class
@@ -97,12 +95,22 @@ LANES = {
 }
 
 # --- Vehicle Tracker Configuration ---
-TRACKER_WINDOW_FRAMES = int(os.getenv("TRACKER_WINDOW", "150"))  # Rolling history window
-TRACKER_MAX_AGE = int(os.getenv("TRACKER_MAX_AGE", "30"))         # Frames before track dies
-TRACKER_MIN_HITS = int(os.getenv("TRACKER_MIN_HITS", "3"))        # Detections before track confirmed
-TRACKER_MAX_DISTANCE = float(os.getenv("TRACKER_MAX_DIST", "100"))# Max pixels for centroid matching
-TRACKER_IOU_THRESHOLD = float(os.getenv("TRACKER_IOU", "0.3"))    # Min IoU for bounding box match
-TRACKER_VELOCITY_ALPHA = float(os.getenv("TRACKER_VEL_ALPHA", "0.8"))  # Exponential smoothing factor
+TRACKER_WINDOW_FRAMES = int(
+    os.getenv("TRACKER_WINDOW", "150")
+)  # Rolling history window
+TRACKER_MAX_AGE = int(os.getenv("TRACKER_MAX_AGE", "30"))  # Frames before track dies
+TRACKER_MIN_HITS = int(
+    os.getenv("TRACKER_MIN_HITS", "3")
+)  # Detections before track confirmed
+TRACKER_MAX_DISTANCE = float(
+    os.getenv("TRACKER_MAX_DIST", "100")
+)  # Max pixels for centroid matching
+TRACKER_IOU_THRESHOLD = float(
+    os.getenv("TRACKER_IOU", "0.3")
+)  # Min IoU for bounding box match
+TRACKER_VELOCITY_ALPHA = float(
+    os.getenv("TRACKER_VEL_ALPHA", "0.8")
+)  # Exponential smoothing factor
 
 # --- Accident Detector Configuration ---
 ACCIDENT_WINDOW_SEC = float(os.getenv("ACCIDENT_WINDOW", "5.0"))
@@ -112,17 +120,21 @@ ACCIDENT_STATIONARY_SEC = float(os.getenv("ACCIDENT_STATIONARY", "3.0"))
 ACCIDENT_SUDDEN_STOP_THRESHOLD = float(os.getenv("ACCIDENT_STOP_THRESH", "0.5"))
 
 # --- Emergency Responder Configuration ---
-EMERGENCY_WEBHOOK_URL = os.getenv("EMERGENCY_WEBHOOK_URL", None)      # Optional webhook for emergency events
+EMERGENCY_WEBHOOK_URL = os.getenv(
+    "EMERGENCY_WEBHOOK_URL", None
+)  # Optional webhook for emergency events
 EMERGENCY_WEBHOOK_TIMEOUT = float(os.getenv("EMERGENCY_WEBHOOK_TIMEOUT", "3.0"))
 EMERGENCY_PREEMPTION_DURATION = float(os.getenv("EMERGENCY_PREEMPTION", "30.0"))
 
 # --- Traffic Simulator Configuration (for demo/testing) ---
 SIMULATOR_ENABLED = os.getenv("SIMULATOR_ENABLED", "false").lower() == "true"
-SIMULATOR_SCENARIO = os.getenv("SIMULATOR_SCENARIO", "normal")  # normal, congestion, collision, stalled, emergency
+SIMULATOR_SCENARIO = os.getenv(
+    "SIMULATOR_SCENARIO", "normal"
+)  # normal, congestion, collision, stalled, emergency
 SIMULATOR_FPS = int(os.getenv("SIMULATOR_FPS", "30"))
 SIMULATOR_WIDTH = int(os.getenv("SIMULATOR_WIDTH", "1280"))
 SIMULATOR_HEIGHT = int(os.getenv("SIMULATOR_HEIGHT", "720"))
 
 # Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-LOG_FILE  = os.getenv("LOG_FILE",  "edge_ai.log")
+LOG_FILE = os.getenv("LOG_FILE", "edge_ai.log")

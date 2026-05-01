@@ -76,7 +76,7 @@ The system runs as a **single Python process with three threads**:
 
 **Purpose:** Central configuration hub. Every tunable parameter for the entire system lives here. No magic numbers are scattered through other files — they all read from this module.
 
-**Usage:** Imported by every other module. Settings can be overridden at runtime via environment variables (e.g. `RTSP_URL=rtsp://... python main.py`).
+**Usage:** Imported by every other module. Settings can be overridden at runtime via environment variables (e.g. `$env:RTSP_URL="rtsp://..."; python main.py` in PowerShell).
 
 #### Key Code Snippets
 
@@ -87,7 +87,7 @@ CAMERA_WIDTH  = 1280
 CAMERA_HEIGHT = 720
 CAMERA_FPS    = 30
 ```
-The RTSP URL is read from an environment variable first, falling back to a default. Set `RTSP_URL=0` to use a USB webcam locally.
+The RTSP URL is read from an environment variable first, falling back to a default. Set `$env:RTSP_URL="0"` to use a USB webcam locally.
 
 **YOLOv8 model settings:**
 ```python
@@ -589,24 +589,24 @@ python main.py
 ```
 
 **Override settings via environment variables:**
-```bash
-RTSP_URL=rtsp://192.168.1.50:554/stream \
-MODEL_PATH=yolov8n.engine \
-DEVICE=cuda \
-CONF_THRESH=0.5 \
+```powershell
+$env:RTSP_URL="rtsp://192.168.1.50:554/stream"
+$env:MODEL_PATH="yolov8n.engine"
+$env:DEVICE="cuda"
+$env:CONF_THRESH="0.5"
 python main.py
 ```
 
 **Local testing with a webcam:**
-```bash
-RTSP_URL=0 DEVICE=cpu python main.py
+```powershell
+$env:RTSP_URL="0"; $env:DEVICE="cpu"; python main.py
 ```
 
 **Access the dashboard:**
 Open `http://localhost:5000` in your browser once the system starts.
 
 **Install dependencies:**
-```bash
+```powershell
 pip install -r requirements.txt
 # On Jetson Nano: follow the special PyTorch install steps in requirements.txt first
 ```

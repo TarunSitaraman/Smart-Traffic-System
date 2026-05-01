@@ -6,8 +6,9 @@
 # =============================================================================
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Tuple
+
 import numpy as np
 
 logger = logging.getLogger("metrics")
@@ -36,8 +37,10 @@ class MetricsEngine:
         if not self.db:
             return self._empty_kpis()
 
-        now_iso = datetime.utcnow().isoformat()
-        then_iso = (datetime.utcnow() - timedelta(minutes=window_minutes)).isoformat()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        then_iso = (
+            datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+        ).isoformat()
 
         try:
             # Get lane metrics for the window
@@ -85,7 +88,7 @@ class MetricsEngine:
         if not self.db:
             return {"series": []}
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         then = now - timedelta(hours=hours)
 
         series = []
@@ -100,18 +103,21 @@ class MetricsEngine:
                 lane_data = self.db.get_lane_metrics_in_range(current_iso, next_iso)
                 throughput = self._compute_throughput(lane_data)
                 queue_stats = self._compute_queue_stats(lane_data)
-
-                series.append({
-                    "timestamp": current_iso,
-                    "throughput": round(throughput, 2),
-                    "queue_avg": round(queue_stats["avg"], 1),
-                })
+                series.append(
+                    {
+                        "timestamp": current_iso,
+                        "throughput": round(throughput, 2),
+                        "queue_avg": round(queue_stats["avg"], 1),
+                    }
+                )
             except Exception:
-                series.append({
-                    "timestamp": current_iso,
-                    "throughput": 0,
-                    "queue_avg": 0,
-                })
+                series.append(
+                    {
+                        "timestamp": current_iso,
+                        "throughput": 0,
+                        "queue_avg": 0,
+                    }
+                )
 
             current = next_bucket
 
@@ -205,7 +211,7 @@ class MetricsEngine:
         """Return a zero-filled KPI dict."""
         return {
             "window_minutes": 60,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "throughput_vehicles_per_min": 0,
             "average_delay_seconds": 0,
             "queue_average_vehicles": 0,

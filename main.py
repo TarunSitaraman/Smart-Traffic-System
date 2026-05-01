@@ -27,20 +27,19 @@ import signal
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
+import api as flask_api
 import config
 import database as db
-import api as flask_api
-from detector import YOLOv8Detector, FrameBuffer, DetectionResult
-from nlp_engine import SceneCaptioner, AlertGenerator
-from tracker import VehicleTracker
-from lane_manager import LaneManager
 from accident_detector import AccidentDetector
+from detector import DetectionResult, FrameBuffer, YOLOv8Detector
 from emergency_responder import EmergencyResponder
+from lane_manager import LaneManager
 from metrics import MetricsEngine
-from signal_controller import TrafficSignalController, PCU_WEIGHTS
-
+from nlp_engine import AlertGenerator, SceneCaptioner
+from signal_controller import PCU_WEIGHTS, PhaseManager, TrafficSignalController
+from tracker import VehicleTracker
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -74,6 +73,7 @@ logging.getLogger("urllib3").setLevel(logging.CRITICAL)
 # Processing loop
 # ---------------------------------------------------------------------------
 
+
 class ProcessingLoop:
     """
     Sits between the detector and the database/NLP layer.
@@ -94,20 +94,28 @@ class ProcessingLoop:
         signal_controller: TrafficSignalController,
         stop_event: threading.Event,
     ) -> None:
-        self._buf            = frame_buffer
-        self._captioner      = captioner
-        self._alert_gen      = alert_gen
-        self._tracker        = tracker
-        self._lane_manager   = lane_manager
-        self._accident_det   = accident_detector
+        self._buf = frame_buffer
+        self._captioner = captioner
+        self._alert_gen = alert_gen
+        self._tracker = tracker
+        self._lane_manager = lane_manager
+        self._accident_det = accident_detector
         self._emergency_resp = emergency_responder
-        self._metrics        = metrics_engine
-        self._signal_ctrl    = signal_controller
-        self._stop           = stop_event
+        self._metrics = metrics_engine
+        self._signal_ctrl = signal_controller
+        self._phase_mgr = PhaseManager()  # NEW
+        self._detector = None  # Will be set in main()
+        self._stop = stop_event
         self._last_processed_id = -1
         self._current_signal_state = {
-            "north": "RED", "south": "RED", "east": "GREEN", "west": "GREEN"
+            "north": "RED",
+            "south": "RED",
+            "east": "GREEN",
+            "west": "GREEN",
         }
+
+    def set_detector(self, detector):
+        self._detector = detector
 
     def run(self) -> None:
         logger.info("Processing loop started.")
@@ -157,7 +165,9 @@ class ProcessingLoop:
             )
 
         # 3. Detect accidents
-        accidents = self._accident_det.update(tracked_dets, signal_state=self._current_signal_state)
+        accidents = self._accident_det.update(
+            tracked_dets, signal_state=self._current_signal_state
+        )
         for accident in accidents:
             db.insert_accident(
                 event_id=accident.event_id,
@@ -190,12 +200,13 @@ class ProcessingLoop:
             }
 
         cycle_result = self._signal_ctrl.compute(lane_data)
-        self._current_signal_state = {
-            "north": "GREEN" if cycle_result.north.green > 0 else "RED",
-            "south": "GREEN" if cycle_result.south.green > 0 else "RED",
-            "east": "GREEN" if cycle_result.east.green > 0 else "RED",
-            "west": "GREEN" if cycle_result.west.green > 0 else "RED",
-        }
+        self._current_signal_state = self._phase_mgr.update(
+            cycle_result
+        )  # CORRECT LOGIC
+
+        # Push signal state back to detector if it's the simulator
+        if self._detector and hasattr(self._detector, "signal_state"):
+            self._detector.signal_state = self._current_signal_state
 
         # 5. Generate scene caption
         caption = self._captioner.caption(
@@ -233,14 +244,18 @@ class ProcessingLoop:
             )
 
 
-
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
+_proc_loop_ref = None
+
+
 def main() -> None:
     logger.info("=" * 60)
-    logger.info("Edge AI System starting  —  %s", datetime.utcnow().isoformat())
+    logger.info(
+        "Edge AI System starting  —  %s", datetime.now(timezone.utc).isoformat()
+    )
     logger.info("RTSP URL   : %s", config.RTSP_URL)
     logger.info("Model      : %s", config.MODEL_PATH)
     logger.info("Device     : %s", config.DEVICE)
@@ -252,11 +267,11 @@ def main() -> None:
 
     # Shared objects
     frame_buffer = FrameBuffer()
-    stop_event   = threading.Event()
+    stop_event = threading.Event()
 
     # NLP components
-    captioner  = SceneCaptioner()
-    alert_gen  = AlertGenerator()
+    captioner = SceneCaptioner()
+    alert_gen = AlertGenerator()
 
     # Traffic system components
     tracker = VehicleTracker(
@@ -281,12 +296,20 @@ def main() -> None:
     metrics_engine = MetricsEngine(db=db)
     signal_controller = TrafficSignalController()
 
-    # Wire the FrameBuffer into the Flask API
+    # Wire the FrameBuffer and signal state into the Flask API
     flask_api.set_frame_buffer(frame_buffer)
+
+    def get_signal_state():
+        if "proc_loop" in locals():
+            return proc_loop._current_signal_state
+        return None
+
+    flask_api.set_signal_state_provider(get_signal_state)
 
     # ----- Thread 1: YOLOv8 detection (or simulator) -----
     if config.SIMULATOR_ENABLED:
         from traffic_simulator import TrafficSimulator
+
         detector = TrafficSimulator(
             width=config.SIMULATOR_WIDTH,
             height=config.SIMULATOR_HEIGHT,
@@ -296,7 +319,9 @@ def main() -> None:
         detector._stop_evt = threading.Event()  # For compatibility
         logger.info("Using traffic simulator (scenario: %s)", config.SIMULATOR_SCENARIO)
         det_thread = threading.Thread(
-            target=lambda: detector.run(frame_buffer), name="DetectorThread", daemon=True
+            target=lambda: detector.run(frame_buffer),
+            name="DetectorThread",
+            daemon=True,
         )
     else:
         detector = YOLOv8Detector(frame_buffer)
@@ -307,12 +332,21 @@ def main() -> None:
     flask_api.set_detector(detector)
 
     # ----- Thread 2: Processing (NLP + DB + tracking + signals) -----
+    global _proc_loop_ref
     proc_loop = ProcessingLoop(
-        frame_buffer, captioner, alert_gen,
-        tracker, lane_manager, accident_detector,
-        emergency_responder, metrics_engine, signal_controller,
-        stop_event
+        frame_buffer,
+        captioner,
+        alert_gen,
+        tracker,
+        lane_manager,
+        accident_detector,
+        emergency_responder,
+        metrics_engine,
+        signal_controller,
+        stop_event,
     )
+    proc_loop.set_detector(detector)
+    _proc_loop_ref = proc_loop
     proc_thread = threading.Thread(
         target=proc_loop.run, name="ProcessingThread", daemon=True
     )
@@ -337,7 +371,7 @@ def main() -> None:
         detector.stop()
         sys.exit(0)
 
-    signal.signal(signal.SIGINT,  shutdown)
+    signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
 
     # Start all threads
@@ -345,8 +379,11 @@ def main() -> None:
     proc_thread.start()
     api_thread.start()
 
-    logger.info("All threads started. Dashboard at http://%s:%s", config.API_HOST, config.API_PORT)
-
+    logger.info(
+        "All threads started. Dashboard at http://%s:%s",
+        config.API_HOST,
+        config.API_PORT,
+    )
     # Keep main thread alive
     try:
         while True:
@@ -356,4 +393,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()  
+    main()

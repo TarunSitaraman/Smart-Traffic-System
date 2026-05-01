@@ -6,13 +6,13 @@ This document explains how to run the Smart Traffic System with synthetic traffi
 
 ### Prerequisites
 - Python 3.8+
-- Dependencies installed: `pip install -r requirements.txt`
+- Dependencies installed: `pip install -r requirements.txt` (run in PowerShell)
 
 ### Run the Simulator Demo
 
-```bash
+```powershell
 # Terminal 1: Run the system with traffic simulator
-SIMULATOR_ENABLED=true SIMULATOR_SCENARIO=normal python main.py
+$env:SIMULATOR_ENABLED="true"; $env:SIMULATOR_SCENARIO="normal"; python main.py
 ```
 
 The system will start with:
@@ -38,40 +38,40 @@ You'll see:
 Control the traffic patterns with the `SIMULATOR_SCENARIO` environment variable:
 
 ### 1. Normal Traffic
-```bash
-SIMULATOR_ENABLED=true SIMULATOR_SCENARIO=normal python main.py
+```powershell
+$env:SIMULATOR_ENABLED="true"; $env:SIMULATOR_SCENARIO="normal"; python main.py
 ```
 - Moderate vehicle arrival rates
 - Realistic traffic flow
 - Good for baseline testing
 
 ### 2. Congestion
-```bash
-SIMULATOR_ENABLED=true SIMULATOR_SCENARIO=congestion python main.py
+```powershell
+$env:SIMULATOR_ENABLED="true"; $env:SIMULATOR_SCENARIO="congestion"; python main.py
 ```
 - High vehicle arrival rates (8+ vehicles/sec per lane)
 - Tests signal controller under load
 - Observe how adaptive timing responds to congestion
 
 ### 3. Collision Detection
-```bash
-SIMULATOR_ENABLED=true SIMULATOR_SCENARIO=collision python main.py
+```powershell
+$env:SIMULATOR_ENABLED="true"; $env:SIMULATOR_SCENARIO="collision"; python main.py
 ```
 - Two vehicles forced to collide at intersection center after ~10 seconds
 - Tests accident detection and emergency response
 - Watch for CRITICAL severity alerts in dashboard
 
 ### 4. Stalled Vehicle
-```bash
-SIMULATOR_ENABLED=true SIMULATOR_SCENARIO=stalled python main.py
+```powershell
+$env:SIMULATOR_ENABLED="true"; $env:SIMULATOR_SCENARIO="stalled"; python main.py
 ```
 - One vehicle stops in the roadway
 - Tests detection of stopped vehicles on active lanes
 - HIGH severity alert should trigger
 
 ### 5. Emergency Vehicle
-```bash
-SIMULATOR_ENABLED=true SIMULATOR_SCENARIO=emergency python main.py
+```powershell
+$env:SIMULATOR_ENABLED="true"; $env:SIMULATOR_SCENARIO="emergency"; python main.py
 ```
 - Ambulance spawns and travels through intersection
 - Tests emergency vehicle detection (class "emergency")
@@ -81,18 +81,18 @@ SIMULATOR_ENABLED=true SIMULATOR_SCENARIO=emergency python main.py
 
 Edit `config.py` or use environment variables to customize:
 
-```bash
+```powershell
 # Simulator parameters
-SIMULATOR_WIDTH=1280 SIMULATOR_HEIGHT=720 SIMULATOR_FPS=30
+$env:SIMULATOR_WIDTH="1280"; $env:SIMULATOR_HEIGHT="720"; $env:SIMULATOR_FPS="30"
 
 # Tracker tuning
-TRACKER_WINDOW=150 TRACKER_MAX_AGE=30 TRACKER_MIN_HITS=3
+$env:TRACKER_WINDOW="150"; $env:TRACKER_MAX_AGE="30"; $env:TRACKER_MIN_HITS="3"
 
 # Accident detection sensitivity
-ACCIDENT_THRESHOLD=0.7 ACCIDENT_COLLISION_IOU=0.2
+$env:ACCIDENT_THRESHOLD="0.7"; $env:ACCIDENT_COLLISION_IOU="0.2"
 
 # Signal control (Webster method)
-ACCIDENT_WINDOW=5.0 ACCIDENT_STATIONARY=3.0
+$env:ACCIDENT_WINDOW="5.0"; $env:ACCIDENT_STATIONARY="3.0"
 ```
 
 ## API Endpoints
@@ -200,8 +200,8 @@ When ready to deploy on Jetson Nano:
    ```
 5. Set `MODEL_PATH=yolov8n.engine` in config.py
 6. Point to real camera stream:
-   ```bash
-   RTSP_URL=rtsp://camera.local/stream python main.py
+   ```powershell
+   $env:RTSP_URL="rtsp://camera.local/stream"; python main.py
    ```
 
 ## Troubleshooting

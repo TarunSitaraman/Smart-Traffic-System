@@ -10,8 +10,8 @@
 import logging
 import random
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta
-from typing import Dict, List, Tuple, Any
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Tuple
 
 import config
 
@@ -74,6 +74,7 @@ _NO_DETECTION_CAPTIONS = [
 # ---------------------------------------------------------------------------
 # Scene Captioner
 # ---------------------------------------------------------------------------
+
 
 class SceneCaptioner:
     """
@@ -169,7 +170,7 @@ class SceneCaptioner:
             cy = cy / frame_height
 
         h_zone = "left" if cx < 0.35 else ("right" if cx > 0.65 else "centre")
-        v_zone = "top"  if cy < 0.35 else ("bottom" if cy > 0.65 else "middle")
+        v_zone = "top" if cy < 0.35 else ("bottom" if cy > 0.65 else "middle")
 
         if v_zone == "middle" and h_zone == "centre":
             return "in the centre"
@@ -183,6 +184,7 @@ class SceneCaptioner:
 # ---------------------------------------------------------------------------
 # Alert Generator
 # ---------------------------------------------------------------------------
+
 
 class AlertGenerator:
     """
@@ -199,7 +201,7 @@ class AlertGenerator:
     def __init__(self) -> None:
         # Track last alert time per class to enforce cooldown
         self._last_alert: Dict[str, datetime] = defaultdict(
-            lambda: datetime.min
+            lambda: datetime(1970, 1, 1, tzinfo=timezone.utc)
         )
 
     def evaluate(
@@ -215,7 +217,7 @@ class AlertGenerator:
             return []
 
         alerts: List[Dict[str, Any]] = []
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         cooldown = timedelta(seconds=config.ALERT_COOLDOWN_SECONDS)
 
         # Group detections by class, keep the most confident per class
@@ -239,13 +241,15 @@ class AlertGenerator:
             msg = self._generate_message(cls, severity, det["confidence"], count)
 
             self._last_alert[cls] = now
-            alerts.append({
-                "class_name": cls,
-                "severity":   severity,
-                "confidence": det["confidence"],
-                "message":    msg,
-                "frame_id":   frame_id,
-            })
+            alerts.append(
+                {
+                    "class_name": cls,
+                    "severity": severity,
+                    "confidence": det["confidence"],
+                    "message": msg,
+                    "frame_id": frame_id,
+                }
+            )
             if severity in ["CRITICAL", "HIGH"]:
                 logger.warning("ALERT [%s] %s", severity, msg)
 
@@ -260,7 +264,7 @@ class AlertGenerator:
     ) -> str:
         templates = _ALERT_TEMPLATES.get(severity, _ALERT_TEMPLATES["LOW"])
         template = random.choice(templates)
-        time_str = datetime.utcnow().strftime("%H:%M:%S UTC")
+        time_str = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
         return template.format(
             obj=class_name,
             conf=confidence,

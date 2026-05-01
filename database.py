@@ -2,11 +2,11 @@
 # database.py — SQLite persistence layer for detections and alerts
 # =============================================================================
 
+import logging
 import sqlite3
 import threading
-import logging
-from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
 
 import config
 
@@ -20,8 +20,8 @@ def _get_conn() -> sqlite3.Connection:
     """Return a per-thread SQLite connection, creating it if needed."""
     if not hasattr(_local, "conn") or _local.conn is None:
         _local.conn = sqlite3.connect(config.DB_PATH, check_same_thread=False)
-        _local.conn.row_factory = sqlite3.Row   # dict-like rows
-        _local.conn.execute("PRAGMA journal_mode=WAL")   # better concurrent reads
+        _local.conn.row_factory = sqlite3.Row  # dict-like rows
+        _local.conn.execute("PRAGMA journal_mode=WAL")  # better concurrent reads
         _local.conn.execute("PRAGMA synchronous=NORMAL")
     return _local.conn
 
@@ -113,14 +113,17 @@ def insert_detections(
     if not detections:
         return
 
-    ts = datetime.utcnow().isoformat(timespec="milliseconds")
+    ts = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
     rows = [
         (
             ts,
             frame_id,
             d["class_name"],
             round(d["confidence"], 4),
-            d["x1"], d["y1"], d["x2"], d["y2"],
+            d["x1"],
+            d["y1"],
+            d["x2"],
+            d["y2"],
             scene_caption,
             round(inference_ms, 2),
         )
@@ -146,7 +149,7 @@ def insert_alert(
     frame_id: int,
 ) -> None:
     """Persist a single alert record."""
-    ts = datetime.utcnow().isoformat(timespec="milliseconds")
+    ts = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
     conn = _get_conn()
     conn.execute(
         """INSERT INTO alerts (timestamp, class_name, severity, confidence, message, frame_id)
@@ -159,18 +162,14 @@ def insert_alert(
 def get_recent_detections(limit: int = 100) -> List[Dict]:
     """Return the most recent detection rows as dicts."""
     conn = _get_conn()
-    cur = conn.execute(
-        "SELECT * FROM detections ORDER BY id DESC LIMIT ?", (limit,)
-    )
+    cur = conn.execute("SELECT * FROM detections ORDER BY id DESC LIMIT ?", (limit,))
     return [dict(row) for row in cur.fetchall()]
 
 
 def get_recent_alerts(limit: int = 50) -> List[Dict]:
     """Return the most recent alert rows as dicts."""
     conn = _get_conn()
-    cur = conn.execute(
-        "SELECT * FROM alerts ORDER BY id DESC LIMIT ?", (limit,)
-    )
+    cur = conn.execute("SELECT * FROM alerts ORDER BY id DESC LIMIT ?", (limit,))
     return [dict(row) for row in cur.fetchall()]
 
 
@@ -185,14 +184,14 @@ def get_detection_stats() -> Dict[str, Any]:
       - top_alert_classes: [(class, count), ...] top 5
     """
     conn = _get_conn()
-    one_hour_ago = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+    one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
 
-    total_det   = conn.execute("SELECT COUNT(*) FROM detections").fetchone()[0]
-    det_1h      = conn.execute(
+    total_det = conn.execute("SELECT COUNT(*) FROM detections").fetchone()[0]
+    det_1h = conn.execute(
         "SELECT COUNT(*) FROM detections WHERE timestamp >= ?", (one_hour_ago,)
     ).fetchone()[0]
     total_alerts = conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
-    alerts_1h    = conn.execute(
+    alerts_1h = conn.execute(
         "SELECT COUNT(*) FROM alerts WHERE timestamp >= ?", (one_hour_ago,)
     ).fetchone()[0]
 
@@ -207,12 +206,12 @@ def get_detection_stats() -> Dict[str, Any]:
     top_alert_classes = [(r["class_name"], r["cnt"]) for r in alert_rows]
 
     return {
-        "total_detections":    total_det,
+        "total_detections": total_det,
         "detections_last_hour": det_1h,
-        "total_alerts":        total_alerts,
-        "alerts_last_hour":    alerts_1h,
-        "class_counts":        class_counts,
-        "top_alert_classes":   top_alert_classes,
+        "total_alerts": total_alerts,
+        "alerts_last_hour": alerts_1h,
+        "class_counts": class_counts,
+        "top_alert_classes": top_alert_classes,
     }
 
 
@@ -233,7 +232,16 @@ def insert_accident(
         """INSERT OR IGNORE INTO accidents
            (event_id, timestamp, lane, track_id, secondary_track_id, accident_type, confidence, score_breakdown)
            VALUES (?,?,?,?,?,?,?,?)""",
-        (event_id, ts, lane, track_id, secondary_track_id, accident_type, round(confidence, 4), score_breakdown),
+        (
+            event_id,
+            ts,
+            lane,
+            track_id,
+            secondary_track_id,
+            accident_type,
+            round(confidence, 4),
+            score_breakdown,
+        ),
     )
     conn.commit()
 
@@ -307,7 +315,9 @@ def purge_old_records() -> None:
     """Delete records older than DB_RETENTION_DAYS. No-op if retention is 0."""
     if config.DB_RETENTION_DAYS <= 0:
         return
-    cutoff = (datetime.utcnow() - timedelta(days=config.DB_RETENTION_DAYS)).isoformat()
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(days=config.DB_RETENTION_DAYS)
+    ).isoformat()
     conn = _get_conn()
     conn.execute("DELETE FROM detections WHERE timestamp < ?", (cutoff,))
     conn.execute("DELETE FROM alerts     WHERE timestamp < ?", (cutoff,))
