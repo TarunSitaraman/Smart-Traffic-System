@@ -47,7 +47,7 @@ from signal_controller import TrafficSignalController, PCU_WEIGHTS
 # ---------------------------------------------------------------------------
 
 logging.basicConfig(
-    level=getattr(logging, config.LOG_LEVEL, logging.INFO),
+    level=logging.CRITICAL,
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
@@ -55,6 +55,19 @@ logging.basicConfig(
     ],
 )
 logger = logging.getLogger("main")
+logger.setLevel(logging.INFO)
+
+# Silence everything else
+logging.getLogger("tracker").setLevel(logging.CRITICAL)
+logging.getLogger("lane_manager").setLevel(logging.CRITICAL)
+logging.getLogger("accident_detector").setLevel(logging.CRITICAL)
+logging.getLogger("detector").setLevel(logging.CRITICAL)
+logging.getLogger("nlp_engine").setLevel(logging.CRITICAL)
+logging.getLogger("database").setLevel(logging.CRITICAL)
+logging.getLogger("simulator").setLevel(logging.CRITICAL)
+logging.getLogger("flask").setLevel(logging.CRITICAL)
+logging.getLogger("werkzeug").setLevel(logging.CRITICAL)
+logging.getLogger("urllib3").setLevel(logging.CRITICAL)
 
 
 # ---------------------------------------------------------------------------
@@ -219,15 +232,6 @@ class ProcessingLoop:
                 duration_sec=cycle_result.cycle_length,
             )
 
-        if result.detections:
-            logger.info(
-                "Frame %d | %d tracked | %.1f ms | Cycle %ds | Caption: %s",
-                result.frame_id,
-                len(tracked_dets),
-                result.inference_ms,
-                cycle_result.cycle_length,
-                caption[:60],
-            )
 
 
 # ---------------------------------------------------------------------------

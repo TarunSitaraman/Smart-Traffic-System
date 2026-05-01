@@ -246,7 +246,8 @@ class AlertGenerator:
                 "message":    msg,
                 "frame_id":   frame_id,
             })
-            logger.info("ALERT [%s] %s", severity, msg)
+            if severity in ["CRITICAL", "HIGH"]:
+                logger.warning("ALERT [%s] %s", severity, msg)
 
         return alerts
 

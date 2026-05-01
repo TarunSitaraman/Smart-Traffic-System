@@ -95,7 +95,7 @@ def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_lanes_lane       ON lane_metrics(lane);
     """)
     conn.commit()
-    logger.info("Database initialised at %s", config.DB_PATH)
+    logger.debug("Database initialised at %s", config.DB_PATH)
 
 
 def insert_detections(
@@ -315,4 +315,3 @@ def purge_old_records() -> None:
     conn.execute("DELETE FROM signal_events WHERE timestamp < ?", (cutoff,))
     conn.execute("DELETE FROM lane_metrics WHERE timestamp < ?", (cutoff,))
     conn.commit()
-    logger.debug("Purged records older than %s days", config.DB_RETENTION_DAYS)

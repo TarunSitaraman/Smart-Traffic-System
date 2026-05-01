@@ -190,13 +190,13 @@ class TrafficSimulator:
         """Spawn new vehicles based on arrival rates."""
         now = time.time()
 
-        # Define arrival rates per scenario
+        # Define arrival rates per scenario (vehicles per second)
         rates = {
-            "normal": {"north": 3.0, "south": 2.5, "east": 2.0, "west": 1.5},
-            "congestion": {"north": 8.0, "south": 7.0, "east": 6.0, "west": 5.0},
-            "collision": {"north": 2.0, "south": 2.0, "east": 2.0, "west": 2.0},
-            "stalled": {"north": 3.0, "south": 2.5, "east": 2.0, "west": 1.5},
-            "emergency": {"north": 2.0, "south": 2.0, "east": 2.0, "west": 2.0},
+            "normal": {"north": 0.5, "south": 0.4, "east": 0.3, "west": 0.2},
+            "congestion": {"north": 2.0, "south": 1.8, "east": 1.5, "west": 1.2},
+            "collision": {"north": 0.5, "south": 0.5, "east": 0.5, "west": 0.5},
+            "stalled": {"north": 0.5, "south": 0.4, "east": 0.3, "west": 0.2},
+            "emergency": {"north": 0.5, "south": 0.5, "east": 0.5, "west": 0.5},
         }
 
         target_rates = rates.get(self.scenario, rates["normal"])
