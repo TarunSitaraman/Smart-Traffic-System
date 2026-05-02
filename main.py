@@ -107,6 +107,7 @@ class ProcessingLoop:
         self._detector = None  # Will be set in main()
         self._stop = stop_event
         self._last_processed_id = -1
+        self._latest_cycle_result = None
         self._current_signal_state = {
             "north": "RED",
             "south": "RED",
@@ -196,10 +197,13 @@ class ProcessingLoop:
             lane_data[lane] = {
                 "pcu": pcu_total,
                 "vehicle_count": len(lane_vehicles),
+                "density": lane_densities.get(lane, {}).get("density", 0.0),
+                "queue_length": lane_queues.get(lane, 0.0),
                 "breakdown": breakdown,
             }
 
         cycle_result = self._signal_ctrl.compute(lane_data)
+        self._latest_cycle_result = cycle_result
         self._current_signal_state = self._phase_mgr.update(
             cycle_result
         )  # CORRECT LOGIC
@@ -304,7 +308,22 @@ def main() -> None:
             return proc_loop._current_signal_state
         return None
 
+    def get_signal_timing():
+        if "proc_loop" in locals():
+            return {
+                "remaining_seconds": proc_loop._phase_mgr.remaining_seconds,
+                "timers": proc_loop._phase_mgr.get_timers(),
+            }
+        return None
+
+    def get_traffic_snapshot():
+        if "proc_loop" in locals() and proc_loop._latest_cycle_result is not None:
+            return {"cycle_result": proc_loop._latest_cycle_result}
+        return None
+
     flask_api.set_signal_state_provider(get_signal_state)
+    flask_api.set_signal_timing_provider(get_signal_timing)
+    flask_api.set_traffic_snapshot_provider(get_traffic_snapshot)
 
     # ----- Thread 1: YOLOv8 detection (or simulator) -----
     if config.SIMULATOR_ENABLED:

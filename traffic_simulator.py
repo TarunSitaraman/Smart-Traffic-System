@@ -46,10 +46,73 @@ class TrafficSimulator:
     """Generates synthetic traffic scenarios for testing."""
 
     VEHICLE_CLASSES = ["car", "truck", "motorcycle"]
+    VEHICLE_CLASS_WEIGHTS = [0.72, 0.13, 0.15]
     VEHICLE_SIZES = {
         "car": (26, 48),
         "truck": (32, 80),
         "motorcycle": (18, 32),
+    }
+    SPAWN_PROFILES = {
+        "normal": {
+            "rate_range": {
+                "north": (0.16, 0.26),
+                "south": (0.14, 0.22),
+                "east": (0.10, 0.18),
+                "west": (0.10, 0.16),
+            },
+            "lane_cap": 6,
+            "min_gap_s": 0.9,
+            "spawn_buffer_px": 120,
+            "visible_fraction": 0.45,
+        },
+        "congestion": {
+            "rate_range": {
+                "north": (0.28, 0.42),
+                "south": (0.24, 0.36),
+                "east": (0.20, 0.30),
+                "west": (0.18, 0.28),
+            },
+            "lane_cap": 9,
+            "min_gap_s": 0.55,
+            "spawn_buffer_px": 105,
+            "visible_fraction": 0.5,
+        },
+        "collision": {
+            "rate_range": {
+                "north": (0.10, 0.16),
+                "south": (0.10, 0.16),
+                "east": (0.10, 0.16),
+                "west": (0.10, 0.16),
+            },
+            "lane_cap": 5,
+            "min_gap_s": 1.0,
+            "spawn_buffer_px": 120,
+            "visible_fraction": 0.45,
+        },
+        "stalled": {
+            "rate_range": {
+                "north": (0.15, 0.24),
+                "south": (0.12, 0.20),
+                "east": (0.10, 0.18),
+                "west": (0.10, 0.16),
+            },
+            "lane_cap": 6,
+            "min_gap_s": 0.9,
+            "spawn_buffer_px": 120,
+            "visible_fraction": 0.45,
+        },
+        "emergency": {
+            "rate_range": {
+                "north": (0.08, 0.14),
+                "south": (0.08, 0.14),
+                "east": (0.08, 0.14),
+                "west": (0.08, 0.14),
+            },
+            "lane_cap": 4,
+            "min_gap_s": 1.1,
+            "spawn_buffer_px": 130,
+            "visible_fraction": 0.45,
+        },
     }
 
     # Lane configurations: spawn and goal positions
@@ -105,7 +168,7 @@ class TrafficSimulator:
         self.frame_count = 0
         self.vehicles: Dict[int, SimulatedVehicle] = {}
         self.next_vehicle_id = 1
-        self.last_spawn_time = {}
+        self.last_spawn_time = {lane: 0.0 for lane in self.LANE_CONFIG}
         self.signal_state = {
             "north": "RED",
             "south": "RED",
@@ -307,25 +370,83 @@ class TrafficSimulator:
             return (0, 0, 255)
 
     def _spawn_vehicles(self):
-        """Spawn new vehicles based on frame intervals to maintain stability."""
-        # Increased spawn rates (smaller intervals)
-        intervals = {
-            "normal": {"north": 45, "south": 55, "east": 70, "west": 100},
-            "congestion": {"north": 12, "south": 15, "east": 18, "west": 22},
-            "collision": {"north": 60, "south": 60, "east": 60, "west": 60},
-            "stalled": {"north": 45, "south": 55, "east": 70, "west": 100},
-            "emergency": {"north": 60, "south": 60, "east": 60, "west": 60},
-        }
+        """Spawn vehicles using randomized flow plus queue backpressure."""
+        profile = self._scenario_profile()
+        now = time.time()
 
-        target_intervals = intervals.get(self.scenario, intervals["normal"])
+        for lane, rate_range in profile["rate_range"].items():
+            if not self._can_spawn_in_lane(lane, now, profile):
+                continue
 
-        for lane, interval in target_intervals.items():
-            if self.frame_count % interval == 0:
+            lane_load = self._approach_vehicle_count(lane)
+            load_ratio = lane_load / max(1, profile["lane_cap"])
+            spawn_rate = random.uniform(*rate_range) * max(0.2, 1.0 - 0.7 * load_ratio)
+
+            # When a lane is backed up on red, ease off new arrivals so the
+            # visible queue reflects what the controller can reasonably clear.
+            if self.signal_state.get(lane) != "GREEN" and lane_load >= max(
+                2, profile["lane_cap"] // 2
+            ):
+                spawn_rate *= 0.45
+
+            spawn_probability = min(0.95, spawn_rate / max(1, self.fps))
+            if random.random() < spawn_probability:
                 self._spawn_vehicle_in_lane(lane)
+                self.last_spawn_time[lane] = now
+
+    def _scenario_profile(self) -> Dict:
+        return self.SPAWN_PROFILES.get(self.scenario, self.SPAWN_PROFILES["normal"])
+
+    def _can_spawn_in_lane(self, lane: str, now: float, profile: Dict) -> bool:
+        if now - self.last_spawn_time.get(lane, 0.0) < profile["min_gap_s"]:
+            return False
+        if self._approach_vehicle_count(lane) >= profile["lane_cap"]:
+            return False
+
+        nearest = self._distance_from_spawn_to_nearest_vehicle(lane)
+        if nearest is not None and nearest < profile["spawn_buffer_px"]:
+            return False
+        return True
+
+    def _distance_from_spawn_to_nearest_vehicle(self, lane: str) -> Optional[float]:
+        config = self.LANE_CONFIG[lane]
+        axis = config["axis"]
+        direction = config["direction"]
+        spawn_pos = config["start"][0] if axis == "x" else config["start"][1]
+        distances = []
+
+        for vehicle in self.vehicles.values():
+            if vehicle.lane != lane:
+                continue
+            pos = vehicle.x if axis == "x" else vehicle.y
+            distance = (pos - spawn_pos) * direction
+            if distance >= 0:
+                distances.append(distance)
+
+        return min(distances) if distances else None
+
+    def _approach_vehicle_count(self, lane: str) -> int:
+        config = self.LANE_CONFIG[lane]
+        axis = config["axis"]
+        direction = config["direction"]
+        stop_pos = config["stop_x"] if axis == "x" else config["stop_y"]
+        count = 0
+
+        for vehicle in self.vehicles.values():
+            if vehicle.lane != lane:
+                continue
+            pos = vehicle.x if axis == "x" else vehicle.y
+            distance_to_stop = (stop_pos - pos) * direction
+            if distance_to_stop > -180:
+                count += 1
+
+        return count
 
     def _spawn_vehicle_in_lane(self, lane: str):
         """Spawn a single vehicle in a lane with increased speed."""
-        cls = random.choice(self.VEHICLE_CLASSES)
+        cls = random.choices(self.VEHICLE_CLASSES, weights=self.VEHICLE_CLASS_WEIGHTS)[
+            0
+        ]
         width, height = self.VEHICLE_SIZES[cls]
         config = self.LANE_CONFIG[lane]
 
@@ -415,6 +536,7 @@ class TrafficSimulator:
     def _draw_vehicles(self, canvas: np.ndarray) -> List[Dict]:
         """Draw vehicles with more detail and return detections."""
         detections = []
+        min_visible_fraction = self._scenario_profile()["visible_fraction"]
 
         for v_id, vehicle in self.vehicles.items():
             # Calculate corners
@@ -427,6 +549,18 @@ class TrafficSimulator:
             y1 = int(vehicle.y - h / 2)
             x2 = int(vehicle.x + w / 2)
             y2 = int(vehicle.y + h / 2)
+
+            vis_x1 = max(0, x1)
+            vis_y1 = max(0, y1)
+            vis_x2 = min(self.width, x2)
+            vis_y2 = min(self.height, y2)
+            if vis_x1 >= vis_x2 or vis_y1 >= vis_y2:
+                continue
+
+            bbox_area = max(1, (x2 - x1) * (y2 - y1))
+            visible_area = (vis_x2 - vis_x1) * (vis_y2 - vis_y1)
+            if (visible_area / bbox_area) < min_visible_fraction:
+                continue
 
             # Color by class
             base_colors = {
@@ -469,10 +603,10 @@ class TrafficSimulator:
             det = {
                 "class_name": vehicle.class_name,
                 "confidence": 0.98,
-                "x1": max(0, x1) / self.width,
-                "y1": max(0, y1) / self.height,
-                "x2": min(self.width, x2) / self.width,
-                "y2": min(self.height, y2) / self.height,
+                "x1": vis_x1 / self.width,
+                "y1": vis_y1 / self.height,
+                "x2": vis_x2 / self.width,
+                "y2": vis_y2 / self.height,
             }
             detections.append(det)
 

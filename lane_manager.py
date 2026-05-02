@@ -14,6 +14,8 @@ logger = logging.getLogger("lane_manager")
 
 class LaneManager:
     """Manages lane-based vehicle assignment and density metrics."""
+    EXPECTED_VISIBLE_CAPACITY = 6
+    MAX_QUEUE_GAP = 0.12
 
     # Default 4-way intersection polygon configuration (normalized 0-1)
     DEFAULT_LANES = {
@@ -95,11 +97,13 @@ class LaneManager:
                 cls = det.get("class_name", "unknown")
                 lane_data[lane]["classes"][cls] = lane_data[lane]["classes"].get(cls, 0) + 1
 
-        # Compute density as vehicles per lane polygon area (normalized)
-        for lane_name, polygon in self.polygons.items():
-            area = self._polygon_area(polygon)
-            if area > 0:
-                lane_data[lane_name]["density"] = lane_data[lane_name]["count"] / area
+        # Demo-friendly density: normalize by expected visible lane capacity
+        # instead of polygon area, which overstates density for 1-2 vehicles.
+        for lane_name in self.polygons.keys():
+            count = lane_data[lane_name]["count"]
+            lane_data[lane_name]["density"] = min(
+                10.0, (count / self.EXPECTED_VISIBLE_CAPACITY) * 10.0
+            )
 
         return lane_data
 
@@ -131,29 +135,45 @@ class LaneManager:
                 # Sort by x coordinate
                 lane_vehicles.sort(key=lambda d: d.get("cx", (d.get("x1", 0) + d.get("x2", 0)) / 2))
 
-            # Sum gaps between consecutive vehicles
-            total_length = 0.0
-            for i in range(len(lane_vehicles) - 1):
-                v1 = lane_vehicles[i]
-                v2 = lane_vehicles[i + 1]
+            stop_line = config.get("stop_line_y", config.get("stop_line_x", 0.5))
 
-                if direction.startswith("N") or direction.startswith("S"):
-                    gap = v2["y1"] - v1["y2"]
-                else:
-                    gap = v2["x1"] - v1["x2"]
+            def front_distance(det: Dict) -> float:
+                if direction == "N->S":
+                    return max(0.0, stop_line - det.get("y2", 0.0))
+                if direction == "S->N":
+                    return max(0.0, det.get("y1", 0.0) - stop_line)
+                if direction == "E->W":
+                    return max(0.0, det.get("x1", 0.0) - stop_line)
+                return max(0.0, stop_line - det.get("x2", 0.0))
 
-                total_length += gap
+            def gap_between(front: Dict, back: Dict) -> float:
+                if direction == "N->S":
+                    return max(0.0, back.get("y1", 0.0) - front.get("y2", 0.0))
+                if direction == "S->N":
+                    return max(0.0, front.get("y1", 0.0) - back.get("y2", 0.0))
+                if direction == "E->W":
+                    return max(0.0, front.get("x1", 0.0) - back.get("x2", 0.0))
+                return max(0.0, back.get("x1", 0.0) - front.get("x2", 0.0))
 
-            # Add the front vehicle's distance to stop line
-            front = lane_vehicles[0]
-            stop_line_offset = 0.0
-            if "stop_line_y" in config:
-                stop_line_offset = abs(front["y1"] - config["stop_line_y"])
-            elif "stop_line_x" in config:
-                stop_line_offset = abs(front["x1"] - config["stop_line_x"])
+            queue_group = []
+            if front_distance(lane_vehicles[0]) <= self.MAX_QUEUE_GAP:
+                queue_group.append(lane_vehicles[0])
+                for i in range(1, len(lane_vehicles)):
+                    if gap_between(lane_vehicles[i - 1], lane_vehicles[i]) <= self.MAX_QUEUE_GAP:
+                        queue_group.append(lane_vehicles[i])
+                    else:
+                        break
 
-            total_length += stop_line_offset
-            queue_lengths[lane_name] = total_length
+            if not queue_group:
+                queue_lengths[lane_name] = 0.0
+                continue
+
+            front = queue_group[0]
+            back = queue_group[-1]
+            if direction.startswith("N") or direction.startswith("S"):
+                queue_lengths[lane_name] = max(0.0, back.get("y2", 0.0) - front.get("y1", 0.0))
+            else:
+                queue_lengths[lane_name] = max(0.0, back.get("x2", 0.0) - front.get("x1", 0.0))
 
         return queue_lengths
 

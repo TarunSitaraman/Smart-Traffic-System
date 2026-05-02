@@ -4,13 +4,38 @@
 
 import os
 
+
+def _default_video_source() -> str:
+    env_value = os.getenv("RTSP_URL")
+    if env_value:
+        return env_value
+
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    preferred_names = [
+        "intersection_demo.mp4",
+        "highway_traffic_compilation_(vod).f136.mp4",
+        "WhatsApp Video 2026-04-18 at 11.35.33 AM.mp4",
+    ]
+
+    for name in preferred_names:
+        path = os.path.join(project_dir, name)
+        if os.path.isfile(path):
+            return path
+
+    for name in sorted(os.listdir(project_dir)):
+        lower = name.lower()
+        if lower.endswith((".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v")):
+            return os.path.join(project_dir, name)
+
+    return "0"
+
 # --- Video Source ---
 # Accepts:  RTSP URL      rtsp://user:pass@host/stream
 #           HTTP MJPEG    http://host/mjpeg
 #           YouTube URL   https://www.youtube.com/watch?v=...  (needs yt-dlp)
 #           Local file    /path/to/traffic.mp4  (loops automatically)
 #           Webcam        0  (first USB camera)
-RTSP_URL = os.getenv("RTSP_URL", "0")
+RTSP_URL = _default_video_source()
 CAMERA_WIDTH = 1280
 CAMERA_HEIGHT = 720
 CAMERA_FPS = 30
